@@ -6,13 +6,14 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 
 import type { PromptInputMessage } from "@/components/ai-elements/prompt-input";
-import { getCurrentTenantId } from "@/core/tenants/store";
 import { getSession } from "@/core/auth/auth-api";
+import { getCurrentTenantId } from "@/core/tenants/store";
 
 import { getAPIClient } from "../api";
 import { getAuthHeaders } from "../api/auth-client";
 import { getBackendBaseURL } from "../config";
 import { useI18n } from "../i18n/hooks";
+import { isSummaryMessage } from "../messages/utils";
 import type { FileInMessage } from "../messages/utils";
 import type { LocalSettings } from "../settings";
 import { useUpdateSubtask } from "../tasks/context";
@@ -243,6 +244,8 @@ export function useThreadStream({
     onToolEnd,
   });
 
+
+
   // Keep listeners ref updated with latest callbacks
   useEffect(() => {
     listeners.current = { onStart, onFinish, onToolEnd };
@@ -251,10 +254,9 @@ export function useThreadStream({
   useEffect(() => {
     const normalizedThreadId = threadId ?? null;
     if (!normalizedThreadId) {
-      // Just reset for new thread creation when threadId becomes null/undefined
       startedRef.current = false;
-      setOnStreamThreadId(normalizedThreadId);
     }
+    setOnStreamThreadId(normalizedThreadId);
     threadIdRef.current = normalizedThreadId;
   }, [threadId]);
 
@@ -343,15 +345,48 @@ export function useThreadStream({
       if (
         typeof event === "object" &&
         event !== null &&
-        "type" in event &&
-        event.type === "task_running"
+        "type" in event
       ) {
-        const e = event as {
-          type: "task_running";
-          task_id: string;
-          message: AIMessage;
-        };
-        updateSubtask({ id: e.task_id, latestMessage: e.message });
+        const e = event as Record<string, unknown>;
+        const taskId = e.task_id as string | undefined;
+        if (!taskId) return;
+
+        if (event.type === "task_running") {
+          updateSubtask({
+            id: taskId,
+            latestMessage: e.message as AIMessage,
+          });
+        } else if (event.type === "task_started") {
+          const patch: Record<string, unknown> = { id: taskId };
+          if (e.started_at) {
+            patch.startedAt = e.started_at as string;
+          }
+          if (e.timeout_seconds != null) {
+            patch.timeoutSeconds = e.timeout_seconds as number;
+          }
+          updateSubtask(patch as Parameters<typeof updateSubtask>[0]);
+        } else if (event.type === "task_completed") {
+          updateSubtask({
+            id: taskId,
+            status: "completed",
+            result: e.result as string,
+            completedAt: e.completed_at as string,
+          });
+        } else if (event.type === "task_failed") {
+          updateSubtask({
+            id: taskId,
+            status: "failed",
+            error: e.error as string,
+            completedAt: e.completed_at as string,
+          });
+        } else if (event.type === "task_timed_out") {
+          updateSubtask({
+            id: taskId,
+            status: "timed_out",
+            error: e.error as string,
+            completedAt: e.completed_at as string,
+          });
+        }
       }
     },
     onError(error) {
@@ -361,17 +396,20 @@ export function useThreadStream({
     onFinish(state) {
       listeners.current.onFinish?.(state.values);
       void queryClient.invalidateQueries({ queryKey: ["threads", "search"] });
+      // Force state refresh to ensure messages are always displayed after stream completes
+      if (state.values) {
+        void queryClient.invalidateQueries({ queryKey: ["thread"] });
+      }
     },
   });
 
-  // Optimistic messages shown before the server stream responds
+  // Optimistic messages
   const [optimisticMessages, setOptimisticMessages] = useState<Message[]>([]);
   const [isUploading, setIsUploading] = useState(false);
   const sendInFlightRef = useRef(false);
-  // Track message count before sending so we know when server has responded
   const prevMsgCountRef = useRef(thread.messages.length);
 
-  // Clear optimistic when server messages arrive (count increases)
+  // Clear optimistic when server messages arrive
   useEffect(() => {
     if (
       optimisticMessages.length > 0 &&
@@ -380,6 +418,19 @@ export function useThreadStream({
       setOptimisticMessages([]);
     }
   }, [thread.messages.length, optimisticMessages.length]);
+
+  // Show toast when conversation is auto-summarized
+  const summaryCountRef = useRef(0);
+  useEffect(() => {
+    const currentCount = thread.messages.filter((m) => isSummaryMessage(m)).length;
+    if (currentCount > summaryCountRef.current) {
+      summaryCountRef.current = currentCount;
+      toast.info(t.threadErrors.conversationSummarized, {
+        description: t.threadErrors.conversationSummarizedDesc,
+        duration: 4000,
+      });
+    }
+  }, [thread.messages]);
 
   const sendMessage = useCallback(
     async (

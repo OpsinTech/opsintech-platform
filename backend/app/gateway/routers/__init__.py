@@ -1,13 +1,15 @@
-from . import admin, announcements, artifacts, mcp, models, skills, suggestions, tenants, threads, uploads
+from . import admin, alerts, announcements, artifacts, mcp, models, skills, suggestions, templates, tenants, threads, uploads
 
 __all__ = [
 	"admin",
+	"alerts",
 	"announcements",
 	"artifacts",
 	"mcp",
 	"models",
 	"skills",
 	"suggestions",
+	"templates",
 	"tenants",
 	"threads",
 	"uploads",

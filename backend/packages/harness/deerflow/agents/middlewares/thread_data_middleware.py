@@ -102,6 +102,10 @@ class ThreadDataMiddleware(AgentMiddleware[ThreadDataMiddlewareState]):
         if user_id is None or user_id == "":
             raise ValueError("User ID is required in runtime context or config.configurable")
 
+        # Bind tenant context to contextvars for execution of tools/skills/configs
+        from deerflow.config.tenant_context import set_tenant_context
+        set_tenant_context(user_id=user_id, tenant_id=tenant_id)
+
         if self._lazy_init:
             # Lazy initialization: only compute paths, don't create directories
             paths = self._get_thread_paths(thread_id, user_id, tenant_id)

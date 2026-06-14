@@ -30,7 +30,11 @@ class ModelResponse(BaseModel):
     description: str | None = Field(None, description="Model description")
     supports_thinking: bool = Field(default=False, description="Whether model supports thinking mode")
     supports_reasoning_effort: bool = Field(default=False, description="Whether model supports reasoning effort")
+    supports_text2image: bool = Field(default=False, description="Whether model supports text-to-image (image generation)")
+    max_input_tokens: int | None = Field(default=None, description="Maximum input tokens (context window) for auto-calculating summarization thresholds")
+    model_type: str | None = Field(default=None, description="Model category: chat, code, reasoning, vision, text2image, multimodal")
     enabled: bool = Field(default=True, description="Whether model is enabled for selection")
+
 
 
 class AvailableModelResponse(ModelResponse):
@@ -63,6 +67,9 @@ class ModelCreateRequest(BaseModel):
     supports_thinking: bool = Field(default=False, description="Whether model supports thinking mode")
     supports_reasoning_effort: bool = Field(default=False, description="Whether model supports reasoning effort")
     supports_vision: bool = Field(default=False, description="Whether model supports vision")
+    supports_text2image: bool = Field(default=False, description="Whether model supports text-to-image (image generation)")
+    max_input_tokens: int | None = Field(default=None, description="Maximum input tokens (context window) for auto-calculating summarization thresholds")
+    model_type: str | None = Field(default=None, description="Model category: chat, code, reasoning, vision, text2image, multimodal")
     enabled: bool = Field(default=True, description="Whether model is enabled")
     use_responses_api: bool | None = Field(default=None, description="Whether to use OpenAI responses API")
     output_version: str | None = Field(default=None, description="Structured output version")
@@ -116,6 +123,8 @@ async def list_models(request: Request) -> ModelsListResponse:
             description=row.description,
             supports_thinking=row.supports_thinking,
             supports_reasoning_effort=row.supports_reasoning_effort,
+            supports_text2image=row.supports_text2image,
+            max_input_tokens=row.max_input_tokens,
             enabled=_model_enabled_from_row_settings(row),
         )
         for row in rows
@@ -151,6 +160,7 @@ async def register_model(request: Request, body: ModelCreateRequest) -> ModelRes
         description=row.description,
         supports_thinking=row.supports_thinking,
         supports_reasoning_effort=row.supports_reasoning_effort,
+        supports_text2image=row.supports_text2image,
         enabled=_model_enabled_from_row_settings(row),
     )
 
@@ -164,6 +174,9 @@ class ModelUpdateRequest(BaseModel):
     supports_thinking: bool | None = None
     supports_reasoning_effort: bool | None = None
     supports_vision: bool | None = None
+    supports_text2image: bool | None = None
+    max_input_tokens: int | None = None
+    model_type: str | None = None
     enabled: bool | None = None
 
 
@@ -173,6 +186,7 @@ class TestConnectionRequest(BaseModel):
     base_url: str | None = Field(default=None, description="Optional provider base URL")
     api_key: str | None = Field(default=None, description="Optional provider API key")
     max_tokens: int = Field(default=32, description="Max tokens for the test call")
+    verify_ssl: bool = Field(default=False, description="Verify SSL certificate when connecting")
 
 
 class TestConnectionResponse(BaseModel):
@@ -221,7 +235,6 @@ async def test_model_connection(request: Request, body: TestConnectionRequest) -
 
     kwargs: dict = {
         "model": body.model,
-        "max_tokens": body.max_tokens,
         "temperature": 0,
         "request_timeout": 15,
     }
@@ -229,6 +242,17 @@ async def test_model_connection(request: Request, body: TestConnectionRequest) -
         kwargs["base_url"] = body.base_url.rstrip("/")
     if body.api_key:
         kwargs["api_key"] = body.api_key
+    if not body.verify_ssl:
+        import httpx
+        kwargs["http_client"] = httpx.Client(verify=False, trust_env=False)
+        kwargs["http_async_client"] = httpx.AsyncClient(verify=False, trust_env=False)
+    if "api_key" not in kwargs:
+        kwargs["api_key"] = "not-needed"
+    # Map generic api_key to provider-specific parameter names
+    if body.use.startswith("langchain_anthropic"):
+        kwargs["anthropic_api_key"] = kwargs.pop("api_key")
+    elif body.use.startswith("langchain_google_genai"):
+        kwargs["google_api_key"] = kwargs.pop("api_key")
 
     try:
         instance = model_class(**kwargs)
@@ -294,6 +318,7 @@ async def list_tenant_models(request: Request) -> ModelsListResponse:
                 description=row.description,
                 supports_thinking=row.supports_thinking,
                 supports_reasoning_effort=row.supports_reasoning_effort,
+                supports_text2image=row.supports_text2image,
                 enabled=_model_enabled_from_row_settings(row),
             )
             for row in rows
@@ -342,6 +367,7 @@ async def update_tenant_model(model_name: str, request: Request, body: ModelUpda
         description=row.description,
         supports_thinking=row.supports_thinking,
         supports_reasoning_effort=row.supports_reasoning_effort,
+        supports_text2image=row.supports_text2image,
         enabled=_model_enabled_from_row_settings(row),
     )
 
@@ -397,6 +423,7 @@ async def get_model(model_name: str, request: Request) -> ModelResponse:
         description=model.description,
         supports_thinking=model.supports_thinking,
         supports_reasoning_effort=model.supports_reasoning_effort,
+        supports_text2image=model.supports_text2image,
         enabled=_model_enabled_from_row_settings(model),
     )
 
@@ -423,6 +450,7 @@ async def update_model(model_name: str, request: Request, body: ModelUpdateReque
         description=row.description,
         supports_thinking=row.supports_thinking,
         supports_reasoning_effort=row.supports_reasoning_effort,
+        supports_text2image=row.supports_text2image,
         enabled=_model_enabled_from_row_settings(row),
     )
 

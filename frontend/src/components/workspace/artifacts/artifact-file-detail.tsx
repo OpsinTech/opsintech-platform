@@ -8,12 +8,10 @@ import {
   PackageIcon,
   SquareArrowOutUpRightIcon,
 } from "lucide-react";
-import { XIcon } from "lucide-react";
+import { X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { Streamdown } from "streamdown";
-
-import { Button } from "@/components/ui/button";
 
 import {
   Artifact,
@@ -24,6 +22,7 @@ import {
   ArtifactTitle,
 
 } from "@/components/ai-elements/artifact";
+import { Button } from "@/components/ui/button";
 import { Select, SelectItem } from "@/components/ui/select";
 import {
   SelectContent,
@@ -35,7 +34,8 @@ import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { CodeEditor } from "@/components/workspace/code-editor";
 import { fetchAuthApi } from "@/core/api/auth-client";
 import { useArtifactContent } from "@/core/artifacts/hooks";
-import { urlOfArtifact } from "@/core/artifacts/utils";
+import { ensureLeadingSlash, urlOfArtifact } from "@/core/artifacts/utils";
+import { getAuthToken } from "@/core/auth/auth-api";
 import { useI18n } from "@/core/i18n/hooks";
 import { installSkill } from "@/core/skills/api";
 import { streamdownPlugins } from "@/core/streamdown";
@@ -43,27 +43,34 @@ import { useCurrentTenant } from "@/core/tenants/hooks";
 import { checkCodeFile, getFileName, getFileExtensionDisplayName, isPreviewableInBrowser } from "@/core/utils/files";
 import { env } from "@/env";
 import { cn, copyToClipboard } from "@/lib/utils";
-import { getAuthToken } from "@/core/auth/auth-api";
 
 import { ArtifactLink } from "../citations/artifact-link";
 import { useThread } from "../messages/context";
 import { Tooltip } from "../tooltip";
 
 import { useArtifacts } from "./context";
+import { PptxSlideViewer } from "./pptx-slide-viewer";
 
 function artifactDisplayPath(filepath: string) {
-  if (filepath.startsWith("write-file:") || filepath.startsWith("mcp-result:")) {
+  let pathStr = filepath;
+  if (filepath.startsWith("write-file:") || filepath.startsWith("mcp-result:") || filepath.startsWith("file:")) {
     try {
-      const pathname = decodeURIComponent(new URL(filepath).pathname);
-      return pathname
-        .replace(/^\/?mnt\/user-data\/(outputs|workspace)\//, "")
-        .replace(/^\/+/, "");
+      pathStr = decodeURIComponent(new URL(filepath).pathname);
     } catch {
-      return filepath;
+      pathStr = filepath;
     }
   }
 
-  return filepath
+  // Strip conversation brain directory path
+  pathStr = pathStr.replace(/^.*\/brain\/[a-f0-9-]+\//i, "");
+
+  // Strip workspace prefixes to keep relative path
+  pathStr = pathStr.replace(/^.*\/issuepilot-api\//i, "issuepilot-api/");
+  pathStr = pathStr.replace(/^.*\/issuepilot-app\//i, "issuepilot-app/");
+  pathStr = pathStr.replace(/^.*\/ConstructingOperating\//i, "ConstructingOperating/");
+  pathStr = pathStr.replace(/^.*\/opsintech-platform\//i, "opsintech-platform/");
+
+  return pathStr
     .replace(/^\/?mnt\/user-data\/(outputs|workspace)\//, "")
     .replace(/^\/+/, "");
 }
@@ -94,6 +101,9 @@ export function ArtifactFileDetail({
   const isSkillFile = useMemo(() => {
     return filepath.endsWith(".skill") || filepath.endsWith(".zip");
   }, [filepath]);
+  const isPptx = useMemo(() => {
+    return filepath.toLowerCase().endsWith(".pptx");
+  }, [filepath]);
   const currentArtifactLabel = useMemo(() => {
     return artifactDisplayPath(filepathFromProps);
   }, [filepathFromProps]);
@@ -111,10 +121,10 @@ export function ArtifactFileDetail({
   const isSupportPreview = useMemo(() => {
     return language === "html" || language === "markdown";
   }, [language]);
-  const { content, isLoading } = useArtifactContent({
+  const { content, isLoading, error } = useArtifactContent({
     threadId,
     filepath: filepathFromProps,
-    enabled: isCodeFile && !isWriteFile,
+    enabled: isCodeFile,
   });
 
   const displayContent = content ?? "";
@@ -122,7 +132,11 @@ export function ArtifactFileDetail({
   const [viewMode, setViewMode] = useState<"code" | "preview">("code");
   const [isInstalling, setIsInstalling] = useState(false);
   const [binaryPreviewUrl, setBinaryPreviewUrl] = useState<string | null>(null);
+  const [pptxBuffer, setPptxBuffer] = useState<ArrayBuffer | null>(null);
+  const [pptxLoading, setPptxLoading] = useState(false);
   const { isMock } = useThread();
+
+  const hasLoadError = !!error || (!isLoading && !isCodeFile && !binaryPreviewUrl && !pptxBuffer && !pptxLoading);
   useEffect(() => {
     if (isSupportPreview) {
       setViewMode("preview");
@@ -143,7 +157,7 @@ export function ArtifactFileDetail({
     const loadPreview = async () => {
       try {
         const response = await fetchAuthApi(
-          `/api/threads/${threadId}/artifacts${filepath}`,
+          `/api/threads/${threadId}/artifacts${ensureLeadingSlash(filepath)}`,
         );
         if (!response.ok) {
           throw new Error(`HTTP ${response.status}`);
@@ -171,6 +185,41 @@ export function ArtifactFileDetail({
       }
     };
   }, [filepath, isCodeFile, isMock, isWriteFile, threadId]);
+
+  useEffect(() => {
+    if (!isPptx || isMock) {
+      setPptxBuffer(null);
+      return;
+    }
+
+    let cancelled = false;
+    const loadPptx = async () => {
+      setPptxLoading(true);
+      try {
+        const response = await fetchAuthApi(
+          `/api/threads/${threadId}/artifacts${ensureLeadingSlash(filepath)}`,
+        );
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}`);
+        }
+        const buffer = await response.arrayBuffer();
+        if (!cancelled) {
+          setPptxBuffer(buffer);
+        }
+      } catch (error) {
+        console.error("Failed to load pptx:", error);
+      } finally {
+        if (!cancelled) {
+          setPptxLoading(false);
+        }
+      }
+    };
+
+    void loadPptx();
+    return () => {
+      cancelled = true;
+    };
+  }, [filepath, isPptx, isMock, threadId]);
 
   const handleDownloadWriteFile = useCallback((e: React.MouseEvent) => {
       e.stopPropagation();
@@ -204,7 +253,7 @@ export function ArtifactFileDetail({
       }
 
       const response = await fetchAuthApi(
-        `/api/threads/${threadId}/artifacts${filepath}?download=true`,
+        `/api/threads/${threadId}/artifacts${ensureLeadingSlash(filepath)}?download=true`,
       );
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}`);
@@ -271,11 +320,11 @@ export function ArtifactFileDetail({
   return (
     <Artifact className={cn(className)}>
       <ArtifactHeader className="h-14 shrink-0 px-4 bg-background border-b border-border">
-        <div className="flex items-center gap-2">
-          <ArtifactTitle>
-            <div className="flex items-center">
+        <div className="flex min-w-0 items-center gap-2 shrink flex-1">
+          <ArtifactTitle className="min-w-0 flex-1">
+            <div className="flex items-center min-w-0">
               <Select value={filepathFromProps} onValueChange={select}>
-                <SelectTrigger className="h-8 border-none bg-transparent! shadow-none select-none focus:outline-0 active:outline-0 focus:ring-0 max-w-[300px] hover:bg-muted/50 rounded-md truncate">
+                <SelectTrigger className="h-8 border-none !bg-transparent shadow-none select-none focus:outline-0 active:outline-0 focus:ring-0 w-0 flex-grow min-w-[120px] max-w-[240px] hover:bg-muted/50 rounded-md truncate">
                   <SelectValue placeholder="Select an artifact">
                     {currentArtifactLabel}
                   </SelectValue>
@@ -316,7 +365,7 @@ export function ArtifactFileDetail({
             </ToggleGroup>
           )}
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 shrink-0">
           <ArtifactActions>
             {!isWriteFile && isSkillFile && canInstallSkill && (
               <Tooltip content={t.toolCalls.skillInstallTooltip}>
@@ -375,7 +424,7 @@ export function ArtifactFileDetail({
               />
             )}
             <ArtifactAction
-              icon={XIcon}
+              icon={X}
               label={t.common.close}
               tooltip={t.common.close}
               onClick={() => setOpen(false)}
@@ -389,28 +438,63 @@ export function ArtifactFileDetail({
             <LoaderIcon className="size-8 animate-spin text-muted-foreground" />
           </div>
         )}
-        {!isLoading && isSupportPreview &&
-          viewMode === "preview" &&
-          (language === "markdown" || language === "html") && (
-            <ArtifactFilePreview
-              content={displayContent}
-              language={language ?? "text"}
-            />
-          )}
-        {!isLoading && isCodeFile && viewMode === "code" && (
+        {!isLoading && hasLoadError && isCodeFile && (
+          <div className="flex size-full items-center justify-center p-8">
+            <div className="flex flex-col items-center gap-4 text-center max-w-sm">
+              <div className="flex size-16 items-center justify-center rounded-full bg-destructive/10">
+                <FileIcon className="size-8 text-destructive" />
+              </div>
+              <div>
+                <p className="text-sm font-medium text-foreground">无法加载文件内容</p>
+                <p className="text-xs text-muted-foreground mt-1">{error?.message || "文件可能已不存在或无权访问"}</p>
+              </div>
+              <Button variant="default" size="sm" onClick={handleDownloadArtifact}>
+                <DownloadIcon className="mr-2 size-4" />
+                {t.common.downloadFile}
+              </Button>
+            </div>
+          </div>
+        )}
+        {!isLoading && !hasLoadError && isSupportPreview && viewMode === "preview" && (
+          <ArtifactFilePreview content={displayContent} language={language ?? "text"} />
+        )}
+        {!isLoading && !hasLoadError && isCodeFile && viewMode === "code" && (
           <CodeEditor
             className="size-full resize-none rounded-none border-none"
             value={displayContent ?? ""}
             readonly
           />
         )}
-        {!isCodeFile && !isLoading && isPreviewableInBrowser(filepath) && (
+        {!isCodeFile && !isLoading && isPreviewableInBrowser(filepath) && binaryPreviewUrl && (
           <iframe
             className="size-full"
-            src={isMock ? urlOfArtifact({ filepath, threadId, isMock }) : (binaryPreviewUrl ?? undefined)}
+            src={isMock ? urlOfArtifact({ filepath, threadId, isMock }) : binaryPreviewUrl}
           />
         )}
-        {!isCodeFile && !isLoading && !isPreviewableInBrowser(filepath) && (
+        {!isCodeFile && !isLoading && isPptx && pptxBuffer && (
+          <PptxSlideViewer
+            pptxBuffer={pptxBuffer}
+            loading={pptxLoading}
+            onDownload={handleDownloadArtifact}
+            fileName={getFileName(filepath)}
+          />
+        )}
+        {!isCodeFile && !isLoading && isPptx && !pptxBuffer && !pptxLoading && (
+          <div className="flex size-full items-center justify-center p-8">
+            <div className="flex flex-col items-center gap-4 text-center max-w-sm">
+              <div className="flex size-16 items-center justify-center rounded-full bg-destructive/10">
+                <FileIcon className="size-8 text-destructive" />
+              </div>
+              <p className="text-sm font-medium text-foreground">无法加载 PPTX 预览</p>
+              <p className="text-xs text-muted-foreground">该文件可能损坏或内容不包含可预览页面。</p>
+              <Button variant="default" size="sm" onClick={handleDownloadArtifact}>
+                <DownloadIcon className="mr-2 size-4" />
+                下载源文件
+              </Button>
+            </div>
+          </div>
+        )}
+        {!isCodeFile && !isLoading && !isPreviewableInBrowser(filepath) && !isPptx && (
           <div className="flex size-full items-center justify-center p-8">
             <div className="flex flex-col items-center gap-4 text-center max-w-sm">
               <div className="flex size-16 items-center justify-center rounded-full bg-muted">

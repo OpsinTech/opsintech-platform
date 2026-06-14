@@ -1,6 +1,6 @@
 "use client";
 
-import { Activity, ChevronRight, Loader2, Pencil, Plus, TestTube2, Trash2 } from "lucide-react";
+import { Activity, ChevronRight, Loader2, Pencil, Plus, TestTube2, Trash2, SearchIcon } from "lucide-react";
 import React, { useEffect, useMemo, useState, type ChangeEvent } from "react";
 import { toast } from "sonner";
 
@@ -21,8 +21,8 @@ import {
   usePingMCPServer,
   useUpdateSingleTenantMCPServer,
 } from "@/core/mcp/hooks";
-import type { MCPServerConfig, McpToolInfo } from "@/core/mcp/types";
 import { getMcpTemplateById, MCP_TEMPLATES } from "@/core/mcp/templates";
+import type { MCPServerConfig, McpToolInfo } from "@/core/mcp/types";
 
 type ToolEditor = {
   name: string;
@@ -664,12 +664,15 @@ export function TenantAdminToolsPage() {
 
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex flex-1 items-center gap-3">
-          <Input
-            placeholder={t.tenantAdmin.tools.searchPlaceholder}
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="max-w-sm"
-          />
+          <div className="relative w-full max-w-sm">
+            <SearchIcon className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder={t.tenantAdmin.tools.searchPlaceholder}
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="pl-9 max-w-sm"
+            />
+          </div>
           <div className="flex items-center gap-2 text-sm">
             <select
               value={sourceFilter}

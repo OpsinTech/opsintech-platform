@@ -10,6 +10,8 @@ from sqlmodel import SQLModel
 from alembic import context
 from deerflow.config.app_config import AppConfig
 from deerflow.database import models as _db_models  # noqa: F401
+from app.models import alerting as _alerting_models  # noqa: F401
+from app.models import agents as _agents_models  # noqa: F401
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.

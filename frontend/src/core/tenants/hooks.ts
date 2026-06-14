@@ -70,6 +70,8 @@ export function useSwitchTenant() {
       void queryClient.invalidateQueries({ queryKey: ["tenantMcpConfig"] });
       void queryClient.invalidateQueries({ queryKey: ["availableMcpConfig"] });
       void queryClient.invalidateQueries({ queryKey: ["artifacts"] });
+      void queryClient.invalidateQueries({ queryKey: ["incidents"] });
+      void queryClient.invalidateQueries({ queryKey: ["alertSources"] });
     },
     onError: (error) => {
       toast.error(

@@ -9,10 +9,10 @@ description: Use this skill when the user requests to generate, create, or write
 
 This skill produces professional, consulting-grade research reports in Markdown format, covering domains such as **market analysis, consumer insights, brand strategy, financial analysis, industry research, competitive intelligence, investment research, and macroeconomic analysis**. It operates across two distinct phases:
 
-1. **Phase 1 — Analysis Framework Generation**: Given a research subject, produce a rigorous analysis framework including chapter skeleton, per-chapter data requirements, analysis logic, and visualization plan.
-2. **Phase 2 — Report Generation**: After data has been collected by other skills, synthesize all inputs into a final polished report.
+1. **Phase 1 — Analysis Framework Generation (第一阶段：分析框架生成)**: Given a research subject, produce a rigorous analysis framework including chapter skeleton, per-chapter data requirements, analysis logic, and visualization plan.
+2. **Phase 2 — Report Generation (第二阶段：报告生成)**: After data has been collected by other skills, synthesize all inputs into a final polished report.
 
-The output adheres to McKinsey/BCG consulting voice standards. The report language follows the `output_locale` setting (default: `zh_CN` for Chinese).
+The output adheres to McKinsey/BCG consulting voice standards. The report language, plan steps, and phase names (e.g. use "第一阶段", "第二阶段" instead of "Phase 1", "Phase 2") follow the `output_locale` setting (default: `zh_CN` for Chinese).
 
 ## Data Authenticity Protocol
 
@@ -43,7 +43,7 @@ The output adheres to McKinsey/BCG consulting voice standards. The report langua
 
 ---
 
-# Phase 1: Analysis Framework Generation
+# Phase 1: Analysis Framework Generation (第一阶段：分析框架生成)
 
 ## Purpose
 
@@ -301,7 +301,7 @@ Assemble all outputs into a single, structured **Analysis Framework Document**:
 
 ---
 
-# Phase 1→2 Handoff: Data Collection & Chart Generation
+# Phase 1→2 Handoff: Data Collection & Chart Generation (第一至二阶段交接：数据收集与图表生成)
 
 After the analysis framework is generated, it is handed off to **other data collection skills** (e.g., deep-research, data-analysis, web search agents) to:
 
@@ -319,7 +319,7 @@ After the analysis framework is generated, it is handed off to **other data coll
 
 ---
 
-# Phase 2: Report Generation
+# Phase 2: Report Generation (第二阶段：报告生成)
 
 ## Purpose
 

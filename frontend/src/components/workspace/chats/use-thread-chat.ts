@@ -1,38 +1,44 @@
 "use client";
 
 import { useParams, useSearchParams } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import { uuid } from "@/core/utils/uuid";
 
 const NEW_THREAD_PLACEHOLDER_ID = "00000000-0000-4000-8000-000000000000";
 
-export function useThreadChat() {
+export function useThreadChat(overrideThreadId?: string | null) {
   const { thread_id: threadIdFromPath } = useParams<{ thread_id: string }>();
+  const effectiveThreadId = overrideThreadId ?? threadIdFromPath;
 
   const searchParams = useSearchParams();
+
+  const isNewRef = useRef(effectiveThreadId === "new");
+
   const [threadId, setThreadId] = useState(() => {
-    return threadIdFromPath === "new"
+    return effectiveThreadId === "new"
       ? NEW_THREAD_PLACEHOLDER_ID
-      : threadIdFromPath;
+      : effectiveThreadId;
   });
 
   const [isNewThread, setIsNewThread] = useState(
-    () => threadIdFromPath === "new",
+    () => effectiveThreadId === "new",
   );
 
   useEffect(() => {
-    if (threadIdFromPath === "new") {
+    if (effectiveThreadId === "new") {
+      isNewRef.current = true;
       setIsNewThread(true);
       setThreadId(uuid());
       return;
     }
 
-    if (threadIdFromPath) {
+    if (effectiveThreadId) {
+      isNewRef.current = false;
       setIsNewThread(false);
-      setThreadId(threadIdFromPath);
+      setThreadId(effectiveThreadId);
     }
-  }, [threadIdFromPath]);
+  }, [effectiveThreadId]);
 
   const isMock = searchParams.get("mock") === "true";
   return { threadId, setThreadId, isNewThread, setIsNewThread, isMock };

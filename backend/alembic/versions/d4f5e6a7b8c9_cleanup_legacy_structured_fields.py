@@ -1,7 +1,7 @@
 """cleanup_legacy_structured_fields
 
 Revision ID: d4f5e6a7b8c9
-Revises: c3a8f6d9b241
+Revises: b1c2d3e4f5a6
 Create Date: 2026-04-28 18:00:00.000000
 
 """

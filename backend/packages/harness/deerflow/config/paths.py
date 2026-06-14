@@ -134,21 +134,41 @@ class Paths:
         return self._user_root(user_id, tenant_id=tenant_id) / "USER.md"
 
     def agents_dir(self, user_id: str | None = None, tenant_id: str | None = None) -> Path:
-        """Root directory for custom agents.
+        """Root directory for custom agents (DEPRECATED — use DB-backed CustomAgent).
 
         If user_id is provided: `{base_dir}/users/{user_id}/agents/`
         If user_id is None: `{base_dir}/agents/` (legacy global path)
+
+        This is kept for Phase A backward compatibility and backfill scripts.
         """
+        import warnings
+
+        warnings.warn(
+            "agents_dir() is deprecated. Agents are now stored in the custom_agents DB table. "
+            "Use load_agent_config() / list_custom_agents() from deerflow.config.agents_config instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         if user_id is None:
             return self.base_dir / "agents"
         return self._user_root(user_id, tenant_id=tenant_id) / "agents"
 
     def agent_dir(self, name: str, user_id: str | None = None, tenant_id: str | None = None) -> Path:
-        """Directory for a specific agent.
+        """Directory for a specific agent (DEPRECATED — use DB-backed CustomAgent).
 
         If user_id is provided: `{base_dir}/users/{user_id}/agents/{name}/`
         If user_id is None: `{base_dir}/agents/{name}/` (legacy global path)
+
+        This is kept for Phase A backward compatibility (filesystem fallback reads).
         """
+        import warnings
+
+        warnings.warn(
+            "agent_dir() is deprecated. Agents are now stored in the custom_agents DB table. "
+            "Use load_agent_config() from deerflow.config.agents_config instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         return self.agents_dir(user_id=user_id, tenant_id=tenant_id) / name.lower()
 
     def agent_memory_file(self, name: str, user_id: str | None = None, tenant_id: str | None = None) -> Path:

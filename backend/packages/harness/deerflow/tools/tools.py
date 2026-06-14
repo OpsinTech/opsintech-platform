@@ -2,8 +2,9 @@ import logging
 
 from langchain.tools import BaseTool
 
+from deerflow.community.duckduckgo.tools import web_fetch_tool, web_search_tool
+from deerflow.community.image_search.tools import image_search_tool
 from deerflow.config import get_app_config
-from deerflow.reflection import resolve_variable
 from deerflow.sandbox.tools import bash_tool, ls_tool, read_file_tool, str_replace_tool, write_file_tool
 from deerflow.tools.builtins import ask_clarification_tool, present_file_tool, task_tool, view_image_tool
 from deerflow.tools.builtins.tool_search import reset_deferred_registry
@@ -20,6 +21,12 @@ BUILTIN_TOOLS = [
     bash_tool,
 ]
 
+DEFAULT_COMMUNITY_TOOLS = [
+    web_search_tool,
+    web_fetch_tool,
+    image_search_tool,
+]
+
 SUBAGENT_TOOLS = [
     task_tool,
 ]
@@ -31,22 +38,25 @@ def get_available_tools(
     model_name: str | None = None,
     subagent_enabled: bool = False,
 ) -> list[BaseTool]:
-    """Get all available tools from config.
+    """Get all available tools.
 
-    Note: MCP tools should be initialized at application startup using
-    `initialize_mcp_tools()` from deerflow.mcp module.
+    Loads builtin sandbox tools, default community tools (DuckDuckGo),
+    conditionally-enabled subagent/vision tools, and MCP tools.
 
     Args:
-        groups: Optional list of tool groups to filter by.
+        groups: Ignored — kept for API compatibility.
         include_mcp: Whether to include tools from MCP servers (default: True).
         model_name: Optional model name to determine if vision tools should be included.
-        subagent_enabled: Whether to include subagent tools (task, task_status).
+        subagent_enabled: Whether to include subagent tools (task).
 
     Returns:
         List of available tools.
     """
     config = get_app_config()
-    loaded_tools = [resolve_variable(tool.use, BaseTool) for tool in config.tools if groups is None or tool.group in groups]
+
+    # Default community tools (DuckDuckGo — free, no API key needed).
+    # Users who want premium providers register MCP tools through the admin UI.
+    loaded_tools: list[BaseTool] = list(DEFAULT_COMMUNITY_TOOLS)
 
     # Conditionally add tools based on config
     builtin_tools = BUILTIN_TOOLS.copy()

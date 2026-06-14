@@ -3,7 +3,7 @@ import type { BaseStream } from "@langchain/langgraph-sdk/react";
 import { fetchAuthApi } from "../api/auth-client";
 import type { AgentThreadState } from "../threads";
 
-import { urlOfArtifact } from "./utils";
+import { ensureLeadingSlash, urlOfArtifact } from "./utils";
 
 export async function loadArtifactContent({
   filepath,
@@ -20,7 +20,7 @@ export async function loadArtifactContent({
   }
   const response = isMock
     ? await fetch(urlOfArtifact({ filepath: enhancedFilepath, threadId, isMock }))
-    : await fetchAuthApi(`/api/threads/${threadId}/artifacts${enhancedFilepath}`);
+    : await fetchAuthApi(`/api/threads/${threadId}/artifacts${ensureLeadingSlash(enhancedFilepath)}`);
   if (!response.ok) {
     throw new Error(`Failed to load artifact content: HTTP ${response.status}`);
   }
@@ -33,13 +33,13 @@ export function loadArtifactContentFromToolCall({
   thread,
 }: {
   url: string;
-  thread: BaseStream<AgentThreadState>;
+  thread: BaseStream<AgentThreadState> | null | undefined;
 }) {
   const url = new URL(urlString);
   const toolCallId = url.searchParams.get("tool_call_id");
   const messageId = url.searchParams.get("message_id");
   
-  if (messageId && toolCallId) {
+  if (messageId && toolCallId && thread?.messages) {
     if (urlString.startsWith("mcp-result:")) {
       const resultMessage = thread.messages.find(
         (m) => m.type === "tool" && m.tool_call_id === toolCallId,

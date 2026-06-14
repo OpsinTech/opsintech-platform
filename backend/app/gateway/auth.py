@@ -179,6 +179,8 @@ class AuthMiddleware(BaseHTTPMiddleware):
             "/api/auth/signup",
             "/api/auth/session",
             "/api/auth/logout",
+            "/api/alerts/ingest/",  # source-level token auth
+            "/api/changes/ingest/",  # source-level token auth (CI/CD webhooks)
         ]
 
     async def dispatch(self, request: Request, call_next):

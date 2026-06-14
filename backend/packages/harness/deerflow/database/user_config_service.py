@@ -1558,9 +1558,98 @@ async def delete_tenant_shared_skill_settings(tenant_id: str, skill_name: str) -
         if name in raw_settings:
             raw_settings.pop(name, None)
             ext_payload["tenant_skill_settings"] = raw_settings
-            row.extensions_config = encrypt_extensions_payload(ext_payload)
-            session.add(row)
-            await session.commit()
+        row.extensions_config = encrypt_extensions_payload(ext_payload)
+        session.add(row)
+        await session.commit()
+
+
+async def get_tenant_personal_skill_settings(tenant_id: str, user_id: str) -> dict[str, dict[str, Any]]:
+    await ensure_user_config(user_id, tenant_id=tenant_id)
+
+    session_factory = get_session_factory()
+    async with session_factory() as session:
+        row = await _get_user_config_record(session, user_id=user_id, tenant_id=tenant_id)
+        if row is None:
+            return {}
+
+        ext_payload = decrypt_extensions_payload(dict(row.extensions_config or {}))
+        raw_settings = ext_payload.get("tenant_skill_settings")
+        if not isinstance(raw_settings, dict):
+            return {}
+
+        settings: dict[str, dict[str, Any]] = {}
+        for skill_name, value in raw_settings.items():
+            if not isinstance(skill_name, str) or not skill_name.strip():
+                continue
+            settings[skill_name] = _normalize_tenant_skill_settings(value)
+        return settings
+
+
+async def update_tenant_personal_skill_settings(
+    tenant_id: str,
+    user_id: str,
+    skill_name: str,
+    *,
+    bound_tools: list[str] | None = None,
+    prompt_template: str | None = None,
+    strategy: str | None = None,
+) -> dict[str, Any]:
+    name = skill_name.strip()
+    if not name:
+        raise ValueError("Skill name is required")
+
+    await ensure_user_config(user_id, tenant_id=tenant_id)
+
+    session_factory = get_session_factory()
+    async with session_factory() as session:
+        row = await _get_user_config_record(session, user_id=user_id, tenant_id=tenant_id)
+        if row is None:
+            raise ValueError("Personal skill config row not found")
+
+        ext_payload = decrypt_extensions_payload(dict(row.extensions_config or {}))
+        raw_settings = ext_payload.get("tenant_skill_settings")
+        if not isinstance(raw_settings, dict):
+            raw_settings = {}
+
+        current = _normalize_tenant_skill_settings(raw_settings.get(name))
+        if bound_tools is not None:
+            current["bound_tools"] = [item.strip() for item in bound_tools if isinstance(item, str) and item.strip()]
+        if prompt_template is not None:
+            current["prompt_template"] = prompt_template.strip() or None
+        if strategy is not None:
+            current["strategy"] = strategy.strip() or None
+
+        raw_settings[name] = current
+        ext_payload["tenant_skill_settings"] = raw_settings
+        row.extensions_config = encrypt_extensions_payload(ext_payload)
+        session.add(row)
+        await session.commit()
+        return current
+
+
+async def delete_tenant_personal_skill_settings(tenant_id: str, user_id: str, skill_name: str) -> None:
+    name = skill_name.strip()
+    if not name:
+        return
+
+    await ensure_user_config(user_id, tenant_id=tenant_id)
+
+    session_factory = get_session_factory()
+    async with session_factory() as session:
+        row = await _get_user_config_record(session, user_id=user_id, tenant_id=tenant_id)
+        if row is None:
+            return
+
+        ext_payload = decrypt_extensions_payload(dict(row.extensions_config or {}))
+        raw_settings = ext_payload.get("tenant_skill_settings")
+        if not isinstance(raw_settings, dict) or name not in raw_settings:
+            return
+
+        del raw_settings[name]
+        ext_payload["tenant_skill_settings"] = raw_settings
+        row.extensions_config = encrypt_extensions_payload(ext_payload)
+        session.add(row)
+        await session.commit()
 
 
 async def get_available_skills(
@@ -1578,26 +1667,33 @@ async def get_available_skills(
     discovered_by_name = {skill.name: skill for skill in discovered}
 
     tenant_skill_settings = await get_tenant_shared_skill_settings(tenant_id)
+    personal_skill_settings = await get_tenant_personal_skill_settings(tenant_id, user_id)
 
     session_factory = get_session_factory()
     async with session_factory() as session:
-        tenant_rows = (
+        # Fetch both tenant shared skills and user's personal skills
+        tenant_shared_id = _tenant_shared_skill_owner_id(tenant_id)
+        db_rows = (
             await session.execute(
                 select(TenantSkill).where(
-                    TenantSkill.user_id == _tenant_shared_skill_owner_id(tenant_id),
                     TenantSkill.tenant_id == tenant_id,
+                    TenantSkill.user_id.in_([tenant_shared_id, user_id]),
                 )
             )
         ).scalars().all()
 
         global_skill_names = {skill.name for skill in global_skills}
-        tenant_rows_by_name = {row.name: row for row in tenant_rows}
+        # To avoid name conflicts, we prioritize tenant shared skills over personal skills with the same name,
+        # or maybe we should keep them separate? Actually, they shouldn't conflict because we enforce uniqueness 
+        # on (tenant_id, user_id, name). But if a personal skill has the same name as a shared one, we should
+        # probably just return both, or let the UI handle it. We will return all.
 
     items: list[dict[str, Any]] = []
 
     global_permissions = ["read", "use"]
     for skill in global_skills:
-        override_row = tenant_rows_by_name.get(skill.name)
+        # For global skills, we check if there's a tenant shared override to disable it
+        override_row = next((r for r in db_rows if r.name == skill.name and r.user_id == tenant_shared_id), None)
         items.append(
             {
                 "name": skill.name,
@@ -1613,11 +1709,27 @@ async def get_available_skills(
         )
 
     tenant_permissions = ["read", "use", "manage"] if is_tenant_admin else ["read", "use"]
-    for row in tenant_rows:
-        if row.name in global_skill_names:
-            continue
+    personal_permissions = ["read", "use", "manage"]
+
+    for row in db_rows:
+        if row.name in global_skill_names and row.user_id == tenant_shared_id:
+            continue  # Already handled as override for global
+
         resolved = discovered_by_name.get(row.name)
-        settings = _normalize_tenant_skill_settings(tenant_skill_settings.get(row.name))
+        
+        if row.user_id == tenant_shared_id:
+            scope = "tenant"
+            source = "tenant_shared"
+            managed = is_tenant_admin or is_platform_admin
+            perms = tenant_permissions
+            settings = _normalize_tenant_skill_settings(tenant_skill_settings.get(row.name))
+        else:
+            scope = "personal"
+            source = "user_personal"
+            managed = True
+            perms = personal_permissions
+            settings = _normalize_tenant_skill_settings(personal_skill_settings.get(row.name))
+
         items.append(
             {
                 "name": row.name,
@@ -1628,10 +1740,12 @@ async def get_available_skills(
                 "bound_tools": settings["bound_tools"],
                 "prompt_template": settings["prompt_template"],
                 "strategy": settings["strategy"],
-                "scope": "tenant",
-                "source": "tenant_shared",
-                "managed_by_current_user": "manage" in tenant_permissions,
-                "effective_permissions": tenant_permissions,
+                "scope": scope,
+                "source": source,
+                "managed_by_current_user": managed,
+                "effective_permissions": perms,
+                "install_dir": row.install_dir,
+                "relative_path": row.relative_path,
             }
         )
 
@@ -1699,6 +1813,51 @@ async def create_tenant_shared_skill(
         await session.refresh(row)
         return row
 
+async def create_tenant_personal_skill(
+    tenant_id: str,
+    user_id: str,
+    *,
+    skill_name: str,
+    enabled: bool = True,
+    category: str | None = "personal",
+    relative_path: str | None = None,
+    install_dir: str | None = None,
+) -> TenantSkill:
+    name = skill_name.strip()
+    if not name:
+        raise ValueError("Skill name is required")
+
+    # Use user_id as namespace for relative path if not specified
+    final_category = (category or "personal").strip() or "personal"
+    final_relative_path = (relative_path or f"{user_id}/{name}").strip()
+    final_install_dir = (install_dir or "").strip()
+
+    session_factory = get_session_factory()
+    async with session_factory() as session:
+        existing = await session.scalar(
+            select(TenantSkill).where(
+                TenantSkill.user_id == user_id,
+                TenantSkill.tenant_id == tenant_id,
+                TenantSkill.name == name,
+            )
+        )
+        if existing is not None:
+            raise RuntimeError(f"Personal Skill '{name}' already exists")
+
+        row = TenantSkill(
+            user_id=user_id,
+            tenant_id=tenant_id,
+            name=name,
+            enabled=enabled,
+            category=final_category,
+            relative_path=final_relative_path,
+            install_dir=final_install_dir,
+        )
+        session.add(row)
+        await session.commit()
+        await session.refresh(row)
+        return row
+
 
 async def update_tenant_shared_skill(
     tenant_id: str,
@@ -1729,9 +1888,60 @@ async def update_tenant_shared_skill(
         if category is not None and category.strip():
             row.category = category.strip()
 
+        session.add(row)
         await session.commit()
         await session.refresh(row)
         return row
+
+async def update_tenant_personal_skill(
+    tenant_id: str,
+    user_id: str,
+    skill_name: str,
+    *,
+    enabled: bool | None = None,
+    category: str | None = None,
+) -> TenantSkill:
+    name = skill_name.strip()
+    if not name:
+        raise ValueError("Skill name is required")
+
+    session_factory = get_session_factory()
+    async with session_factory() as session:
+        row = await session.scalar(
+            select(TenantSkill).where(
+                TenantSkill.user_id == user_id,
+                TenantSkill.tenant_id == tenant_id,
+                TenantSkill.name == name,
+            )
+        )
+        if row is None:
+            raise ValueError(f"Personal Skill '{name}' not found")
+
+        if enabled is not None:
+            row.enabled = bool(enabled)
+        if category is not None and category.strip():
+            row.category = category.strip()
+
+        session.add(row)
+        await session.commit()
+        await session.refresh(row)
+        return row
+
+async def delete_tenant_personal_skill(tenant_id: str, user_id: str, skill_name: str) -> None:
+    name = skill_name.strip()
+    if not name:
+        return
+
+    session_factory = get_session_factory()
+    async with session_factory() as session:
+        await session.execute(
+            delete(TenantSkill).where(
+                TenantSkill.user_id == user_id,
+                TenantSkill.tenant_id == tenant_id,
+                TenantSkill.name == name,
+            )
+        )
+        await session.commit()
 
 
 async def set_tenant_shared_skill_enabled(tenant_id: str, skill_name: str, enabled: bool) -> TenantSkill:

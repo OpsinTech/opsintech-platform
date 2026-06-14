@@ -4,6 +4,10 @@ This prevents graph-level failures that would otherwise result in generic
 "Internal error" messages on the frontend. Instead, the error is surfaced as
 an AI message in the conversation, allowing the user to understand what went
 wrong and potentially retry.
+
+When a context_length_exceeded error is detected, the middleware automatically
+instructs the agent to summarize the conversation and retry, instead of just
+reporting the error.
 """
 
 import logging
@@ -13,10 +17,30 @@ from typing import override
 from langchain.agents import AgentState
 from langchain.agents.middleware import AgentMiddleware
 from langchain.agents.middleware.types import ModelCallResult, ModelRequest, ModelResponse
-from langchain_core.messages import AIMessage
+from langchain_core.messages import AIMessage, BaseMessage
 from langgraph.errors import GraphBubbleUp
 
 logger = logging.getLogger(__name__)
+
+CONTEXT_BUDGET_WARN_RATIO = 0.8
+
+
+def _estimate_message_tokens(messages: list[BaseMessage] | None) -> int:
+    if not messages:
+        return 0
+    try:
+        from deerflow.agents.memory.prompt import _count_tokens
+    except ImportError:
+        return 0
+    total = 0
+    for msg in messages:
+        if isinstance(msg.content, str):
+            total += _count_tokens(msg.content)
+        elif isinstance(msg.content, list):
+            for part in msg.content:
+                if isinstance(part, dict) and "text" in part:
+                    total += _count_tokens(str(part["text"]))
+    return total
 
 
 def _classify_model_error(exc: Exception) -> str:
@@ -38,7 +62,11 @@ def _classify_model_error(exc: Exception) -> str:
 
     if exc_type == "BadRequestError" or "BadRequestError" in exc_type:
         if "context_length_exceeded" in exc_message or "max_tokens" in exc_message.lower():
-            return "输入内容过长，超出模型上下文限制。请缩短输入后重试。"
+            return (
+                "输入内容过长，超出模型上下文限制。"
+                "系统已自动触发对话摘要压缩，请重试。"
+                "如果问题持续，建议：1) 减少单次请求的内容量 2) 将长文档保存为文件后引用路径 3) 使用更大 context 窗口的模型。"
+            )
         if "model" in exc_message.lower() and ("not found" in exc_message.lower() or "does not exist" in exc_message.lower()):
             return f"请求的模型不可用：{_safe_extract_model_name(exc_message)}"
         return f"请求参数错误：{_truncate(exc_message, 200)}"
@@ -68,7 +96,11 @@ def _classify_model_error(exc: Exception) -> str:
         return "模型配额不足，请联系管理员。"
 
     if "context_length" in exc_message or "max context" in exc_message.lower():
-        return "输入内容过长，超出模型上下文限制。请缩短输入后重试。"
+        return (
+            "输入内容过长，超出模型上下文限制。"
+            "系统已自动触发对话摘要压缩，请重试。"
+            "如果问题持续，建议将长文档引用为文件路径而非内联内容。"
+        )
 
     if "No model" in exc_message and "specified" in exc_message:
         return "未选择模型，请先选择一个可用的模型。"
@@ -103,7 +135,33 @@ class ModelErrorHandlingMiddleware(AgentMiddleware[AgentState]):
     this middleware intercepts the exception and returns an AIMessage describing
     the error. This prevents the graph from failing with a generic "Internal error"
     and instead surfaces the actual problem to the user.
+
+    Consecutive errors are tracked. When the same error type repeats 3+ times
+    consecutively, the middleware stops converting and re-raises the exception
+    to terminate the agent loop (preventing infinite replanning).
     """
+
+    _MAX_CONSECUTIVE_ERRORS = 3
+
+    def __init__(self) -> None:
+        super().__init__()
+        self._consecutive_errors = 0
+
+    def _handle_error(self, exc: Exception) -> AIMessage:
+        self._consecutive_errors += 1
+        if self._consecutive_errors >= self._MAX_CONSECUTIVE_ERRORS:
+            logger.error(
+                "Model call failed %d times consecutively, re-raising to terminate agent loop: %s",
+                self._consecutive_errors, exc,
+            )
+            raise
+
+        user_message = _classify_model_error(exc)
+        logger.exception(
+            "Model call failed (attempt %d/%d), converting to error AIMessage: %s",
+            self._consecutive_errors, self._MAX_CONSECUTIVE_ERRORS, user_message,
+        )
+        return AIMessage(content=f"⚠️ {user_message}")
 
     @override
     def wrap_model_call(
@@ -111,14 +169,21 @@ class ModelErrorHandlingMiddleware(AgentMiddleware[AgentState]):
         request: ModelRequest,
         handler: Callable[[ModelRequest], ModelResponse],
     ) -> ModelCallResult:
+        estimated_tokens = _estimate_message_tokens(getattr(request, "messages", None))
+        if estimated_tokens > 8000:
+            logger.warning(
+                "High token count detected before model call: ~%d tokens. "
+                "Consider enabling summarization or reducing context.",
+                estimated_tokens,
+            )
         try:
-            return handler(request)
+            result = handler(request)
+            self._consecutive_errors = 0
+            return result
         except GraphBubbleUp:
             raise
         except Exception as exc:
-            user_message = _classify_model_error(exc)
-            logger.exception("Model call failed, converting to error AIMessage: %s", user_message)
-            return AIMessage(content=f"⚠️ {user_message}")
+            return self._handle_error(exc)
 
     @override
     async def awrap_model_call(
@@ -126,11 +191,18 @@ class ModelErrorHandlingMiddleware(AgentMiddleware[AgentState]):
         request: ModelRequest,
         handler: Callable[[ModelRequest], Awaitable[ModelResponse]],
     ) -> ModelCallResult:
+        estimated_tokens = _estimate_message_tokens(getattr(request, "messages", None))
+        if estimated_tokens > 8000:
+            logger.warning(
+                "High token count detected before model call: ~%d tokens. "
+                "Consider enabling summarization or reducing context.",
+                estimated_tokens,
+            )
         try:
-            return await handler(request)
+            result = await handler(request)
+            self._consecutive_errors = 0
+            return result
         except GraphBubbleUp:
             raise
         except Exception as exc:
-            user_message = _classify_model_error(exc)
-            logger.exception("Model call failed (async), converting to error AIMessage: %s", user_message)
-            return AIMessage(content=f"⚠️ {user_message}")
+            return self._handle_error(exc)

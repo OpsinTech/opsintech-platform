@@ -1,6 +1,6 @@
 import { FilesIcon, XIcon } from "lucide-react";
 import { usePathname } from "next/navigation";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useContext, useEffect, useMemo, useRef, useState } from "react";
 import type { GroupImperativeHandle } from "react-resizable-panels";
 
 import { ConversationEmptyState } from "@/components/ai-elements/conversation";
@@ -18,7 +18,7 @@ import {
   ArtifactFileDetail,
   useArtifacts,
 } from "../artifacts";
-import { useThread } from "../messages/context";
+import { useThread, ThreadContext } from "../messages/context";
 
 const CLOSE_MODE = { chat: 100, artifacts: 0 };
 const OPEN_MODE = { chat: 60, artifacts: 40 };
@@ -38,7 +38,11 @@ const ChatBox: React.FC<{ children: React.ReactNode; threadId: string }> = ({
   children,
   threadId,
 }) => {
-  const { thread } = useThread();
+  const threadContextVal = useContext(ThreadContext);
+  if (!threadContextVal) {
+    return <div className="flex size-full min-h-0 flex-col bg-background" />;
+  }
+  const { thread } = threadContextVal;
   const pathname = usePathname();
   const threadIdRef = useRef(threadId);
   const layoutRef = useRef<GroupImperativeHandle>(null);
@@ -59,7 +63,7 @@ const ChatBox: React.FC<{ children: React.ReactNode; threadId: string }> = ({
     const virtualArtifacts = extractToolResultArtifacts(thread.messages).map(
       (item) => item.filepath,
     );
-    const combined = [...(thread.values.artifacts ?? []), ...virtualArtifacts];
+    const combined = [...virtualArtifacts, ...(thread.values.artifacts ?? [])];
     const seen = new Set<string>();
     const unique: string[] = [];
     for (const file of combined) {
@@ -95,13 +99,13 @@ const ChatBox: React.FC<{ children: React.ReactNode; threadId: string }> = ({
       setArtifacts(mergedArtifacts);
     }
 
-    // DO NOT automatically deselect the artifact when switching threads, because the artifacts auto discovering is not work now.
-    // if (
-    //   selectedArtifact &&
-    //   !thread.values.artifacts?.includes(selectedArtifact)
-    // ) {
-    //   deselect();
-    // }
+    // Clear selected artifact when switching threads if the artifact is no longer available.
+    if (
+      selectedArtifact &&
+      !mergedArtifacts.includes(selectedArtifact)
+    ) {
+      deselect();
+    }
 
     if (
       env.NEXT_PUBLIC_STATIC_WEBSITE_ONLY === "true" &&

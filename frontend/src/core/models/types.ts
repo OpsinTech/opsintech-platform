@@ -6,7 +6,10 @@ export interface Model {
   description?: string | null;
   supports_thinking?: boolean;
   supports_reasoning_effort?: boolean;
+  supports_vision?: boolean;
+  supports_text2image?: boolean;
   enabled?: boolean;
+  model_type?: string | null;
 }
 
 export interface RegisterModelInput {
@@ -18,12 +21,15 @@ export interface RegisterModelInput {
   supports_thinking?: boolean;
   supports_reasoning_effort?: boolean;
   supports_vision?: boolean;
+  supports_text2image?: boolean;
   enabled?: boolean;
   use_responses_api?: boolean;
   output_version?: string;
   max_tokens?: number;
   base_url?: string;
   api_key?: string;
+  verify_ssl?: boolean;
+  model_type?: string | null;
 }
 
 // New types for "available" models endpoint with scope and permissions metadata
@@ -44,6 +50,7 @@ export interface TestConnectionInput {
   base_url?: string;
   api_key?: string;
   max_tokens?: number;
+  verify_ssl?: boolean;
 }
 
 export interface TestConnectionResponse {

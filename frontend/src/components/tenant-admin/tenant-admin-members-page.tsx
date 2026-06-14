@@ -1,7 +1,7 @@
 "use client";
 
-import { PlusIcon, Trash2Icon, UserCheckIcon, XIcon } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { PlusIcon, SearchIcon, Trash2Icon, UserCheckIcon, XIcon } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -389,6 +389,37 @@ export function TenantAdminMembersPage() {
   const { mutateAsync: removeMember } = useRemoveTenantMember();
 
   const [addDialogOpen, setAddDialogOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [roleFilter, setRoleFilter] = useState("all");
+  const [statusFilter, setStatusFilter] = useState("all");
+
+  const filteredMembers = useMemo(() => {
+    return members.filter((member) => {
+      const q = searchQuery.toLowerCase().trim();
+      if (q) {
+        const matchesName = (member.name ?? "").toLowerCase().includes(q);
+        const matchesEmail = (member.email ?? "").toLowerCase().includes(q);
+        const matchesId = (member.user_id ?? "").toLowerCase().includes(q);
+        if (!matchesName && !matchesEmail && !matchesId) {
+          return false;
+        }
+      }
+
+      if (roleFilter !== "all") {
+        if (member.role !== roleFilter) {
+          return false;
+        }
+      }
+
+      if (statusFilter !== "all") {
+        if (member.status !== statusFilter) {
+          return false;
+        }
+      }
+
+      return true;
+    });
+  }, [members, searchQuery, roleFilter, statusFilter]);
 
   const handleRoleChange = async (userId: string, role: TenantMemberRole) => {
     try {
@@ -450,6 +481,69 @@ export function TenantAdminMembersPage() {
         </div>
       )}
 
+      {/* Search and Filters Bar */}
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center justify-between border rounded-lg bg-card px-4 py-3 shadow-xs">
+        {/* Search Input */}
+        <div className="relative flex-1 max-w-md">
+          <SearchIcon className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
+          <Input
+            placeholder="搜索成员姓名、邮箱或用户ID..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="pl-9 h-9"
+          />
+        </div>
+
+        {/* Dropdowns filters */}
+        <div className="flex flex-wrap items-center gap-3">
+          {/* Role Filter */}
+          <div className="flex items-center gap-1.5">
+            <span className="text-xs text-muted-foreground font-medium whitespace-nowrap">角色:</span>
+            <Select value={roleFilter} onValueChange={setRoleFilter}>
+              <SelectTrigger className="w-[120px] h-9">
+                <SelectValue placeholder="全部角色" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">全部角色</SelectItem>
+                <SelectItem value="tenant_admin">{t.tenantAdmin.members.roleAdmin}</SelectItem>
+                <SelectItem value="tenant_member">{t.tenantAdmin.members.roleMember}</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* Status Filter */}
+          <div className="flex items-center gap-1.5">
+            <span className="text-xs text-muted-foreground font-medium whitespace-nowrap">状态:</span>
+            <Select value={statusFilter} onValueChange={setStatusFilter}>
+              <SelectTrigger className="w-[120px] h-9">
+                <SelectValue placeholder="全部状态" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">全部状态</SelectItem>
+                <SelectItem value="active">{t.tenantAdmin.members.statusActive}</SelectItem>
+                <SelectItem value="inactive">{t.tenantAdmin.members.statusInactive}</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* Reset Button */}
+          {(searchQuery || roleFilter !== "all" || statusFilter !== "all") && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => {
+                setSearchQuery("");
+                setRoleFilter("all");
+                setStatusFilter("all");
+              }}
+              className="h-9 px-3 text-xs"
+            >
+              重置
+            </Button>
+          )}
+        </div>
+      </div>
+
       <div className="overflow-x-auto rounded-lg border">
         <table className="w-full text-left text-sm">
           <thead className="border-b bg-muted/30 text-muted-foreground">
@@ -467,14 +561,16 @@ export function TenantAdminMembersPage() {
                   {t.tenantAdmin.members.loading}
                 </td>
               </tr>
-            ) : members.length === 0 ? (
+            ) : filteredMembers.length === 0 ? (
               <tr>
                 <td className="px-4 py-6 text-muted-foreground" colSpan={4}>
-                  {t.tenantAdmin.members.empty}
+                  {searchQuery || roleFilter !== "all" || statusFilter !== "all"
+                    ? "未找到匹配的成员"
+                    : t.tenantAdmin.members.empty}
                 </td>
               </tr>
             ) : (
-              members.map((member) => {
+              filteredMembers.map((member) => {
                 const label = member.name ?? member.email ?? member.user_id;
                 return (
                   <tr key={member.user_id} className="border-t">

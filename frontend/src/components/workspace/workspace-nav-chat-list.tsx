@@ -2,11 +2,12 @@
 
 import {
   BellIcon,
-  // BotIcon,
   LayoutDashboardIcon,
   PlayCircleIcon,
   Settings2Icon,
+  ShieldAlertIcon,
   ShieldCheckIcon,
+  BotIcon,
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -40,12 +41,18 @@ export function WorkspaceNavChatList() {
       icon: PlayCircleIcon,
       active: pathname.startsWith("/workspace/chats"),
     },
-    // {
-    //   name: t.sidebarNav.agents,
-    //   href: "/workspace/agents",
-    //   icon: BotIcon,
-    //   active: pathname.startsWith("/workspace/agents"),
-    // },
+    {
+      name: t.sidebarNav.incidents,
+      href: "/workspace/incidents",
+      icon: ShieldAlertIcon,
+      active: pathname.startsWith("/workspace/incidents"),
+    },
+    {
+      name: t.sidebarNav.skillsPlaza,
+      href: "/workspace/skills",
+      icon: BotIcon,
+      active: pathname.startsWith("/workspace/skills"),
+    },
     {
       name: t.sidebarNav.announcements,
       href: "/workspace/announcements",

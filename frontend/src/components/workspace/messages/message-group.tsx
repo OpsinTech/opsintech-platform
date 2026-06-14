@@ -107,8 +107,11 @@ export function MessageGroup({
         setThinkDuration(Math.round((Date.now() - thinkStartTime.current) / 1000));
         thinkStartTime.current = null;
       }
+      if (firstReasoningStep?.reasoning?.trim() || lastReasoningStep?.reasoning?.trim()) {
+        setShowLastThinking(true);
+      }
     }
-  }, [isLoading]);
+  }, [isLoading, firstReasoningStep, lastReasoningStep]);
 
   return (
     <ChainOfThought

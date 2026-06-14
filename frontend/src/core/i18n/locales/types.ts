@@ -142,6 +142,7 @@ export interface Translations {
     announcements: string;
     auditGovernance: string;
     systemSettings: string;
+    incidents: string;
   };
 
   // Agents
@@ -152,9 +153,11 @@ export interface Translations {
     emptyTitle: string;
     emptyDescription: string;
     chat: string;
+    editLabel: string;
     delete: string;
     deleteConfirm: string;
     deleteSuccess: string;
+    noDescription: string;
     newChat: string;
     createPageTitle: string;
     createPageSubtitle: string;
@@ -169,6 +172,26 @@ export interface Translations {
     agentCreated: string;
     startChatting: string;
     backToGallery: string;
+    edit: {
+      pageTitle: string;
+      systemPromptLabel: string;
+      systemPromptPlaceholder: string;
+      descriptionLabel: string;
+      descriptionPlaceholder: string;
+      modelLabel: string;
+      modelDefault: string;
+      skillsLabel: string;
+      skillsHint: string;
+      skillsCount: (count: number) => string;
+      tagsLabel: string;
+      tagsPlaceholder: string;
+      toolGroupsLabel: string;
+      toolGroupsPlaceholder: string;
+      save: string;
+      saving: string;
+      saveSuccess: string;
+      saveError: string;
+    };
   };
 
   // Breadcrumb
@@ -246,6 +269,7 @@ export interface Translations {
     in_progress: string;
     completed: string;
     failed: string;
+    timed_out: string;
   };
 
   // Token Usage
@@ -397,6 +421,7 @@ export interface Translations {
         thinking: string;
         reasoningEffort: string;
         vision: string;
+        text2image: string;
       };
       status: {
         enabled: string;
@@ -430,6 +455,7 @@ export interface Translations {
         baseUrlPlaceholder: string;
         maxTokens: string;
         maxTokensPlaceholder: string;
+        sslVerification: string;
         testConnection: string;
         testing: string;
         test: string;
@@ -440,6 +466,7 @@ export interface Translations {
         thinking: string;
         reasoningEffort: string;
         vision: string;
+        text2image: string;
         defaultEnabled: string;
         advancedConfig: string;
         outputVersion: string;
@@ -1019,6 +1046,7 @@ export interface Translations {
           supportsThinking: string;
           supportsReasoningEffort: string;
           supportsVision: string;
+          supportsText2Image: string;
           useResponsesApi: string;
           outputVersion: string;
           maxTokens: string;
@@ -1263,6 +1291,8 @@ export interface Translations {
   // Thread Error Messages
   threadErrors: {
     rateLimited: string;
+    conversationSummarized: string;
+    conversationSummarizedDesc: string;
     authFailed: string;
     contentTooLong: string;
     invalidResponse: string;
@@ -1598,6 +1628,13 @@ export interface Translations {
       edit: string;
       delete: string;
       deleting: string;
+      detailViewHint: string;
+      aiGenerate: string;
+      aiGeneratePlaceholder: string;
+      aiGenerating: string;
+      testChat: string;
+      testChatPlaceholder: string;
+      testChatHint: string;
     };
     settings: {
       title: string;

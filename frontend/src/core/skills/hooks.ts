@@ -8,6 +8,10 @@ import {
   loadTenantSkills,
   patchTenantSkill,
   updateTenantSkill,
+  createPersonalSkill,
+  patchPersonalSkill,
+  deletePersonalSkill,
+  importPersonalSkill,
 } from "./api";
 
 import { loadSkills } from ".";
@@ -127,6 +131,67 @@ export function usePatchTenantSkill() {
   });
 }
 
+export function useCreatePersonalSkill() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (input: {
+      name: string;
+      description: string;
+      instructions?: string | null;
+      enabled?: boolean;
+      changelog?: string | null;
+      bound_tools?: string[];
+      prompt_template?: string | null;
+      strategy?: string | null;
+    }) =>
+      createPersonalSkill(input),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["availableSkills"] });
+    },
+  });
+}
+
+export function usePatchPersonalSkill() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (input: {
+      skillName: string;
+      description?: string | null;
+      instructions?: string | null;
+      enabled?: boolean;
+      category?: string;
+      bound_tools?: string[];
+      prompt_template?: string | null;
+      strategy?: string | null;
+    }) =>
+      patchPersonalSkill(input.skillName, {
+        description: input.description,
+        instructions: input.instructions,
+        enabled: input.enabled,
+        category: input.category,
+        bound_tools: input.bound_tools,
+        prompt_template: input.prompt_template,
+        strategy: input.strategy,
+      }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["availableSkills"] });
+    },
+  });
+}
+
+export function useDeletePersonalSkill() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (skillName: string) => deletePersonalSkill(skillName),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["availableSkills"] });
+    },
+  });
+}
+
 export function useImportTenantSkill() {
   const queryClient = useQueryClient();
 
@@ -134,6 +199,17 @@ export function useImportTenantSkill() {
     mutationFn: (file: File) => importTenantSkill(file),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ["tenantSkills"] });
+      void queryClient.invalidateQueries({ queryKey: ["availableSkills"] });
+    },
+  });
+}
+
+export function useImportPersonalSkill() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (file: File) => importPersonalSkill(file),
+    onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ["availableSkills"] });
     },
   });

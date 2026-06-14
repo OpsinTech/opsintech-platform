@@ -187,6 +187,7 @@ def test_tenant_shared_model_update_enabled_passes_to_service(monkeypatch) -> No
         description = "tenant model"
         supports_thinking = False
         supports_reasoning_effort = False
+        supports_text2image = False
         settings = {"enabled": False}
 
     async def _fake_update_tenant_shared_model(tenant_id: str, model_name: str, payload: dict):

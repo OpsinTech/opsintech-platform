@@ -80,6 +80,11 @@ import {
   DropdownMenuTrigger,
 } from "../ui/dropdown-menu";
 
+import {
+  SkillSettingsPanel,
+  DEFAULT_SKILL_SETTINGS,
+  type SkillSettings,
+} from "./chats";
 import { useThread } from "./messages/context";
 import { ModeHoverGuide } from "./mode-hover-guide";
 import { SkillBadge } from "./skill-badge";
@@ -99,6 +104,81 @@ function getResolvedMode(
     return mode;
   }
   return supportsThinking ? "pro" : "flash";
+}
+
+function formatPromptWithSkillSettings(
+  text: string,
+  skillName: string,
+  settings: SkillSettings,
+): string {
+  let systemContext = "";
+  if (skillName === "ppt-master" && settings["ppt-master"]) {
+    const ppt = settings["ppt-master"];
+    let templatePath = "";
+    if (ppt.templatePptx) {
+      templatePath = `\n- template_pptx: ${ppt.templatePptx}`;
+    } else if (ppt.template && ppt.template !== "free") {
+      if (ppt.template.includes("/") || ppt.template.includes("\\")) {
+        templatePath = `\n- template_path: ${ppt.template}`;
+      } else {
+        templatePath = `\n- template_path: skills/public/ppt-master/templates/layouts/${ppt.template}`;
+      }
+    }
+    const aspect = ppt.aspectRatio === "16:9" 
+      ? "ppt169" 
+      : (ppt.aspectRatio === "4:3" ? "ppt43" : ppt.aspectRatio);
+    const industryContext = ppt.industry && ppt.industry !== "none" ? `\n- industry: ${ppt.industry}` : "";
+    const imageModelContext = ppt.imageModel && ppt.imageModel !== "none" ? `\n- image_model: ${ppt.imageModel}` : "";
+    systemContext = `[SYSTEM CONTEXT: ppt-master]
+- style: ${ppt.style}
+- aspect_ratio: ${aspect}
+- pages: ${ppt.pages}${templatePath}${industryContext}${imageModelContext}
+- transition: ${ppt.transition || "fade"}
+- animation: ${ppt.animation || "auto"}
+- formula: ${ppt.formula || "mixed"}
+- merge_paragraphs: ${!!ppt.mergeParagraphs}`;
+  } else if (skillName === "deep-research" && settings["deep-research"]) {
+    const res = settings["deep-research"];
+    systemContext = `[SYSTEM CONTEXT: deep-research]
+- depth: ${res.depth}
+- time_range: ${res.timeRange}
+- sources: ${res.sources.join(", ")}`;
+  } else if (skillName === "data-analysis" && settings["data-analysis"]) {
+    const da = settings["data-analysis"];
+    systemContext = `[SYSTEM CONTEXT: data-analysis]
+- preference: ${da.preference}
+- output_format: ${da.outputFormat}`;
+  } else if (skillName === "chart-visualization" && settings["chart-visualization"]) {
+    const cv = settings["chart-visualization"];
+    systemContext = `[SYSTEM CONTEXT: chart-visualization]
+- chart_type: ${cv.chartType}
+- color_theme: ${cv.colorTheme}`;
+  } else if (skillName === "consulting-analysis" && settings["consulting-analysis"]) {
+    const ca = settings["consulting-analysis"];
+    const frameworkMap: Record<string, string> = {
+      SWOT: "SWOT",
+      PESTEL: "PESTEL",
+      porter: "Porter's Five Forces",
+      bcg: "BCG Matrix",
+      "3c": "3C Model",
+    };
+    const mappedFrameworks = ca.frameworks.map((f) => frameworkMap[f] || f);
+    systemContext = `[SYSTEM CONTEXT: consulting-analysis]
+- report_type: ${ca.reportType}
+- frameworks: ${mappedFrameworks.join(", ")}
+- language: ${ca.language}`;
+  } else if (skillName === "pm-analysis" && settings["pm-analysis"]) {
+    const pm = settings["pm-analysis"];
+    systemContext = `[SYSTEM CONTEXT: pm-analysis]
+- analysis_mode: ${pm.mode}
+- primary_framework: ${pm.framework}
+- prd_template: ${pm.template}`;
+  }
+
+  if (systemContext) {
+    return `${systemContext}\n\n[USER QUERY]\n${text}`;
+  }
+  return text;
 }
 
 export function InputBox({
@@ -146,7 +226,8 @@ export function InputBox({
   onStop?: () => void;
   onNewChat?: () => void | Promise<void>;
 }) {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
+  const [skillSettings, setSkillSettings] = useState<SkillSettings>(DEFAULT_SKILL_SETTINGS);
   const searchParams = useSearchParams();
   const { models: availableModels } = useAvailableModels();
   const models = useMemo(() => {
@@ -186,6 +267,7 @@ export function InputBox({
   const [skillMenuPosition, setSkillMenuPosition] = useState({ top: 0, left: 0, width: 280 });
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const slashStartPosRef = useRef<number | null>(null);
+  const [settingsPanelOpen, setSettingsPanelOpen] = useState(false);
 
   useEffect(() => {
     if (models.length === 0) {
@@ -268,9 +350,18 @@ export function InputBox({
       setFollowups([]);
       setFollowupsHidden(false);
       setFollowupsLoading(false);
-      onSubmit?.(message);
+
+      const text = message.text || "";
+      const formattedText = context.skill_name
+        ? formatPromptWithSkillSettings(text, context.skill_name, skillSettings)
+        : text;
+
+      onSubmit?.({
+        ...message,
+        text: formattedText,
+      });
     },
-    [models.length, onSubmit, isStreaming],
+    [models.length, onSubmit, isStreaming, context.skill_name, skillSettings],
   );
 
   const handleExport = useCallback(
@@ -350,6 +441,7 @@ export function InputBox({
         ...context,
         skill_name: skill.name,
       });
+      setSettingsPanelOpen(true);
       setSkillMenuOpen(false);
       setSkillMenuSearch("");
       slashStartPosRef.current = null;
@@ -363,8 +455,16 @@ export function InputBox({
         ...context,
         skill_name: undefined,
       });
+      setSettingsPanelOpen(false);
     },
     [context, onContextChange],
+  );
+
+  const handleCloseSettingsPanel = useCallback(
+    () => {
+      setSettingsPanelOpen(false);
+    },
+    [],
   );
 
   const handleSkillMenuOpen = useCallback(
@@ -400,6 +500,19 @@ export function InputBox({
     },
     [skillMenuOpen, handleSkillMenuOpen],
   );
+
+  useEffect(() => {
+    if (!settingsPanelOpen) {
+      return;
+    }
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        setSettingsPanelOpen(false);
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [settingsPanelOpen]);
 
   useEffect(() => {
     const streaming = status === "streaming";
@@ -476,7 +589,7 @@ export function InputBox({
     <div ref={promptRootRef} className="relative">
       <PromptInput
         className={cn(
-          "bg-background/85 rounded-2xl backdrop-blur-sm transition-all duration-300 ease-out *:data-[slot='input-group']:rounded-2xl",
+          "bg-background/85 rounded-2xl backdrop-blur-sm transition-all duration-300 ease-out overflow-hidden *:data-[slot='input-group']:rounded-2xl",
           className,
         )}
         disabled={submitDisabled}
@@ -495,8 +608,18 @@ export function InputBox({
         <PromptInputAttachments>
           {(attachment) => <PromptInputAttachment data={attachment} />}
         </PromptInputAttachments>
+        {context.skill_name && settingsPanelOpen && (
+          <SkillSettingsPanel
+            skillName={context.skill_name}
+            settings={skillSettings}
+            onChange={setSkillSettings}
+            onClose={handleCloseSettingsPanel}
+            locale={locale}
+            threadId={threadId}
+          />
+        )}
         <PromptInputBody className="flex-row items-start gap-2 px-3 pt-3">
-          {context.skill_name && (
+          {context.skill_name && !t.inputBox.suggestions.some(s => s.skillName === context.skill_name) && (
             <div className="shrink-0 pt-1">
               <SkillBadge
                 skillName={context.skill_name}
@@ -852,35 +975,71 @@ export function InputBox({
 
           {/* Skill 图标区域 - 图标之间不需要分隔线 */}
           {/* Skill 按钮组 - 统一紧凑样式 */}
-          {t.inputBox.suggestions.map((s) => ({
-            icon: s.icon,
-            label: s.label,
-            skillName: s.skillName,
-            prompt: s.prompt,
-            description: s.description,
-            sel: [s.prompt.indexOf("["), s.prompt.indexOf("]") + 1] as [number, number],
-          })).map((item) => (
-            <Tooltip key={item.label} content={item.description}>
-              <PromptInputButton
-                className="h-7 px-2.5 text-xs font-normal text-muted-foreground hover:text-foreground border-0 bg-transparent shadow-none hover:bg-muted/60"
-                onClick={() => {
-                  textInput.setInput(item.prompt);
-                  setTimeout(() => {
-                    const textarea = document.querySelector<HTMLTextAreaElement>(
-                      "textarea[name='message']",
-                    );
-                    if (textarea && item.sel) {
-                      textarea.setSelectionRange(item.sel[0], item.sel[1]);
-                      textarea.focus();
-                    }
-                  }, 100);
-                }}
-              >
-                <item.icon className="size-3.5" />
-                <span className="ml-1">{item.label}</span>
-              </PromptInputButton>
-            </Tooltip>
-          ))}
+          {(() => {
+            const activeSuggestion = t.inputBox.suggestions.find(s => s.skillName === context.skill_name);
+            
+            if (activeSuggestion) {
+              const Icon = activeSuggestion.icon;
+              return (
+                <div key={activeSuggestion.skillName} className="h-7 flex items-center gap-0.5 bg-primary/10 border border-primary/20 rounded-md px-1 animate-in fade-in-0 zoom-in-95 duration-200">
+                  <Tooltip content={settingsPanelOpen ? "点击隐藏设置" : "点击显示设置"}>
+                    <button
+                      type="button"
+                      onClick={() => setSettingsPanelOpen(!settingsPanelOpen)}
+                      className={cn(
+                        "h-5 px-1.5 text-xs font-semibold text-primary hover:text-primary/90 flex items-center gap-1 cursor-pointer rounded-sm hover:bg-primary/5 transition-colors",
+                        settingsPanelOpen && "bg-primary/15"
+                      )}
+                    >
+                      <Icon className="size-3.5" />
+                      <span>{activeSuggestion.label}</span>
+                    </button>
+                  </Tooltip>
+                  <div className="bg-primary/15 h-3 w-px mx-0.5" />
+                  <Tooltip content="取消使用技能">
+                    <button
+                      type="button"
+                      onClick={handleClearSkill}
+                      className="size-4.5 rounded-sm flex items-center justify-center text-primary/60 hover:text-primary hover:bg-primary/5 transition-colors cursor-pointer"
+                    >
+                      <XIcon className="size-3" />
+                    </button>
+                  </Tooltip>
+                </div>
+              );
+            }
+
+            return t.inputBox.suggestions.map((s) => ({
+              icon: s.icon,
+              label: s.label,
+              skillName: s.skillName,
+              description: s.description,
+            })).map((item) => {
+              const isSelected = context.skill_name === item.skillName;
+              return (
+                <Tooltip key={item.label} content={item.description}>
+                  <PromptInputButton
+                    className={cn(
+                      "h-7 px-2.5 text-xs font-normal border-0 shadow-none",
+                      isSelected
+                        ? "bg-primary/10 text-primary font-semibold"
+                        : "text-muted-foreground hover:text-foreground bg-transparent hover:bg-muted/60"
+                    )}
+                    onClick={() => {
+                      onContextChange?.({
+                        ...context,
+                        skill_name: item.skillName,
+                      });
+                      setSettingsPanelOpen(true);
+                    }}
+                  >
+                    <item.icon className="size-3.5" />
+                    <span className="ml-1">{item.label}</span>
+                  </PromptInputButton>
+                </Tooltip>
+              );
+            });
+          })()}
         </PromptInputTools>
 
         {/* 提交和停止按钮 - 置右 */}

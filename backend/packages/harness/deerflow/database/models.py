@@ -1,7 +1,7 @@
 from datetime import UTC, datetime
 from typing import Any
 
-from sqlalchemy import JSON, Column, DateTime, UniqueConstraint, func
+from sqlalchemy import JSON, Column, DateTime, Text, UniqueConstraint, func
 from sqlmodel import Field, SQLModel
 
 
@@ -83,6 +83,9 @@ class TenantModelConfig(SQLModel, table=True):
     supports_thinking: bool = Field(default=False)
     supports_reasoning_effort: bool = Field(default=False)
     supports_vision: bool = Field(default=False)
+    supports_text2image: bool = Field(default=False)
+    max_input_tokens: int | None = Field(default=None)
+    model_type: str | None = Field(default=None)
     settings: dict[str, Any] = Field(default_factory=dict, sa_column=Column(JSON, nullable=False))
     created_at: datetime = Field(
         default_factory=lambda: datetime.now(UTC),
@@ -181,9 +184,7 @@ class PlatformAnnouncementRead(SQLModel, table=True):
     """Per-user read/dismiss state for announcements under tenant context."""
 
     __tablename__ = "platform_announcement_reads"
-    __table_args__ = (
-        UniqueConstraint("announcement_id", "user_id", "tenant_id", name="uq_announcement_read_user_tenant"),
-    )
+    __table_args__ = (UniqueConstraint("announcement_id", "user_id", "tenant_id", name="uq_announcement_read_user_tenant"),)
 
     id: int | None = Field(default=None, primary_key=True)
     announcement_id: int = Field(index=True)
@@ -191,6 +192,36 @@ class PlatformAnnouncementRead(SQLModel, table=True):
     tenant_id: str = Field(index=True)
     read_at: datetime | None = Field(default=None, sa_column=Column(DateTime(timezone=True), nullable=True))
     dismissed_at: datetime | None = Field(default=None, sa_column=Column(DateTime(timezone=True), nullable=True))
+    created_at: datetime = Field(
+        default_factory=lambda: datetime.now(UTC),
+        sa_column=Column(DateTime(timezone=True), nullable=False, server_default=func.now()),
+    )
+    updated_at: datetime = Field(
+        default_factory=lambda: datetime.now(UTC),
+        sa_column=Column(DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now()),
+    )
+
+
+class SubagentRun(SQLModel, table=True):
+    """Persistent record of a subagent execution lifecycle."""
+
+    __tablename__ = "subagent_runs"
+
+    id: str = Field(primary_key=True, description="task_id matching the in-memory SubagentResult")
+    thread_id: str = Field(index=True, description="The parent thread / conversation ID")
+    tenant_id: str | None = Field(default=None, index=True)
+    user_id: str | None = Field(default=None, index=True)
+    subagent_type: str = Field(index=True, description="general-purpose, bash, etc.")
+    description: str | None = Field(default=None)
+    prompt: str | None = Field(default=None, sa_column=Column(Text, nullable=True))
+    status: str = Field(default="pending", index=True, description="pending/running/completed/failed/timed_out")
+    result: str | None = Field(default=None, sa_column=Column(Text, nullable=True))
+    error: str | None = Field(default=None, sa_column=Column(Text, nullable=True))
+    timeout_seconds: int = Field(default=900)
+    max_turns: int | None = Field(default=None)
+    trace_id: str | None = Field(default=None)
+    started_at: datetime | None = Field(default=None, sa_column=Column(DateTime(timezone=True), nullable=True))
+    completed_at: datetime | None = Field(default=None, sa_column=Column(DateTime(timezone=True), nullable=True))
     created_at: datetime = Field(
         default_factory=lambda: datetime.now(UTC),
         sa_column=Column(DateTime(timezone=True), nullable=False, server_default=func.now()),

@@ -118,15 +118,31 @@ export function MarkdownContent({
     <MessageResponse
       className={cn(
         "text-[13px] leading-[1.7] text-zinc-800 dark:text-zinc-200",
+        // Paragraphs
         "[&_p]:mb-3 [&_p:last-child]:mb-0",
-        "[&_h1]:mb-3 [&_h1]:text-xl [&_h1]:font-semibold [&_h1]:tracking-tight",
-        "[&_h2]:mb-2 [&_h2]:mt-4 [&_h2]:text-lg [&_h2]:font-semibold [&_h2]:tracking-tight",
-        "[&_h3]:mb-1.5 [&_h3]:mt-3 [&_h3]:text-base [&_h3]:font-semibold [&_h3]:tracking-tight",
+        // Headings
+        "[&_h1]:mb-3 [&_h1]:mt-6 [&_h1]:text-xl [&_h1]:font-bold [&_h1]:tracking-tight [&_h1]:text-zinc-900 dark:[&_h1]:text-zinc-100",
+        "[&_h2]:mb-2 [&_h2]:mt-5 [&_h2]:text-lg [&_h2]:font-bold [&_h2]:tracking-tight [&_h2]:text-zinc-900 dark:[&_h2]:text-zinc-100",
+        "[&_h3]:mb-1.5 [&_h3]:mt-4 [&_h3]:text-base [&_h3]:font-semibold [&_h3]:tracking-tight [&_h3]:text-zinc-900 dark:[&_h3]:text-zinc-100",
+        "[&_h4]:mb-1 [&_h4]:mt-3 [&_h4]:text-sm [&_h4]:font-semibold [&_h4]:tracking-tight [&_h4]:text-zinc-900 dark:[&_h4]:text-zinc-100",
+        // Lists
         "[&_ul]:mb-3 [&_ul]:ml-5 [&_ul]:list-disc [&_ul_li]:pl-1 [&_ul_li]:mb-1.5",
         "[&_ol]:mb-3 [&_ol]:ml-5 [&_ol]:list-decimal [&_ol_li]:pl-1 [&_ol_li]:mb-1.5",
+        // Blockquotes
         "[&_blockquote]:border-l-4 [&_blockquote]:border-zinc-300 [&_blockquote]:pl-4 [&_blockquote]:italic [&_blockquote]:text-zinc-500 dark:[&_blockquote]:border-zinc-700 dark:[&_blockquote]:text-zinc-400",
+        // Links
         "[&_a]:text-primary [&_a]:underline-offset-4 hover:[&_a]:underline",
+        // Bold/Strong
         "[&_strong]:font-semibold [&_strong]:text-zinc-900 dark:[&_strong]:text-zinc-100",
+        // Tables
+        "[&_table]:w-full [&_table]:mb-4 [&_table]:border-collapse",
+        "[&_th]:border [&_th]:border-zinc-200 dark:[&_th]:border-zinc-700 [&_th]:px-3 [&_th]:py-2 [&_th]:text-left [&_th]:font-semibold [&_th]:bg-zinc-50 dark:[&_th]:bg-zinc-800",
+        "[&_td]:border [&_td]:border-zinc-200 dark:[&_td]:border-zinc-700 [&_td]:px-3 [&_td]:py-2",
+        // Code blocks
+        "[&_pre]:mb-4 [&_pre]:rounded-lg [&_pre]:bg-zinc-900 [&_pre]:p-4",
+        "[&_pre_code]:text-zinc-100 [&_pre_code]:text-sm",
+        // Horizontal rules
+        "[&_hr]:my-6 [&_hr]:border-zinc-200 dark:[&_hr]:border-zinc-700",
         className,
       )}
       remarkPlugins={remarkPlugins}

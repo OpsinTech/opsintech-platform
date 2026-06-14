@@ -156,10 +156,10 @@ export const ko: Translations = {
       },
       {
         label: "PPT 생성",
-        skillName: "ppt-generation",
-        prompt: "ppt-generation 스킬을 사용하여 [주제]에 대한 전문적인 프레젠테이션을 만들어 주세요.",
+        skillName: "ppt-master",
+        prompt: "ppt-master 스킬을 사용하여 [주제]에 대한 전문적인 프레젠테이션을 만들어 주세요.",
         icon: PresentationIcon,
-        description: "비즈니스/학술/미니멀/Apple Keynote/크리에이티브 스타일을 지원하는 전문 PPT 생성",
+        description: "전문 PPT 생성, SVG 레이아웃 및 DrawingML 편집 가능한 도형 기반",
       },
       {
         label: "컨설팅 분석",
@@ -167,6 +167,13 @@ export const ko: Translations = {
         prompt: "consulting-analysis 스킬을 사용하여 [주제]에 대한 전문 컨설팅 분석을 수행하고 보고서를 생성하세요.",
         icon: BriefcaseIcon,
         description: "McKinsey/BCG 스타일의 전문 컨설팅 보고서 생성 (시장 분석, 브랜드 전략, 재무 분석 등)",
+      },
+      {
+        label: "PM 요구사항",
+        skillName: "pm-analysis",
+        prompt: "pm-analysis 스킬을 사용하여 새로운 제품 요구사항을 분석하거나 경쟁사 벤치마킹을 수행하세요.",
+        icon: CompassIcon,
+        description: "제품 디스커버리 및 요구공학 전문가 워크플로우, 상세 경쟁사 분석 및 구조화된 PRD 생성 지원",
       },
     ],
     suggestionsCreate: [],
@@ -189,6 +196,7 @@ export const ko: Translations = {
     announcements: "공지사항",
     auditGovernance: "감사 및 거버넌스",
     systemSettings: "시스템 설정",
+    incidents: "알림",
   },
 
   // Agents
@@ -201,10 +209,12 @@ export const ko: Translations = {
     emptyDescription:
       "전문 시스템 프롬프트를 가진 첫 번째 사용자 정의 에이전트를 생성하세요.",
     chat: "채팅",
+    editLabel: "편집",
     delete: "삭제",
     deleteConfirm:
       "이 에이전트를 삭제하시겠습니까? 이 작업은 취소할 수 없습니다.",
     deleteSuccess: "에이전트 삭제됨",
+    noDescription: "설명 없음",
     newChat: "새 채팅",
     createPageTitle: "에이전트 디자인하기",
     createPageSubtitle:
@@ -223,6 +233,26 @@ export const ko: Translations = {
     agentCreated: "에이전트가 생성되었습니다!",
     startChatting: "채팅 시작",
     backToGallery: "갤러리로 돌아가기",
+    edit: {
+      pageTitle: "에이전트 편집: {name}",
+      systemPromptLabel: "시스템 프롬프트",
+      systemPromptPlaceholder: "에이전트의 성격, 역할 및 행동 지침을 정의하세요...",
+      descriptionLabel: "설명",
+      descriptionPlaceholder: "이 에이전트의 기능에 대한 간략한 설명",
+      modelLabel: "모델 재정의",
+      modelDefault: "기본값 (테넌트 기본 모델)",
+      skillsLabel: "스킬 (SOP)",
+      skillsHint: "이 에이전트가 사용할 수 있는 스킬을 선택하세요. 비워두면 모든 테넌트 스킬을 사용할 수 있습니다.",
+      skillsCount: (count: number) => `${count}개 스킬 선택됨`,
+      tagsLabel: "태그",
+      tagsPlaceholder: "입력 후 Enter를 눌러 태그 추가...",
+      toolGroupsLabel: "도구 그룹",
+      toolGroupsPlaceholder: "입력 후 Enter를 눌러 도구 그룹 추가...",
+      save: "저장",
+      saving: "저장 중...",
+      saveSuccess: "에이전트가 업데이트되었습니다",
+      saveError: "에이전트 업데이트 실패",
+    },
   },
 
   // Breadcrumb
@@ -301,6 +331,7 @@ export const ko: Translations = {
     in_progress: "하위 작업 실행 중",
     completed: "하위 작업 완료",
     failed: "하위 작업 실패",
+    timed_out: "하위 작업 시간 초과",
   },
 
   // Token Usage
@@ -465,6 +496,7 @@ export const ko: Translations = {
         thinking: "사고",
         reasoningEffort: "추론",
         vision: "비전",
+        text2image: "이미지 생성",
       },
       status: {
         enabled: "활성화됨",
@@ -498,6 +530,7 @@ export const ko: Translations = {
         baseUrlPlaceholder: "선택 사항",
         maxTokens: "최대 토큰",
         maxTokensPlaceholder: "선택 사항",
+        sslVerification: "SSL 인증",
         testConnection: "연결 테스트",
         testing: "테스트 중...",
         test: "연결 테스트",
@@ -508,6 +541,7 @@ export const ko: Translations = {
         thinking: "사고",
         reasoningEffort: "추론 노력",
         vision: "비전",
+        text2image: "이미지 생성 기능",
         defaultEnabled: "기본 활성화",
         advancedConfig: "고급 설정",
         outputVersion: "출력 버전",
@@ -1079,6 +1113,7 @@ export const ko: Translations = {
           supportsThinking: "사고 모드 지원",
           supportsReasoningEffort: "추론 노력 지원",
           supportsVision: "비전 지원",
+          supportsText2Image: "이미지 생성 지원",
           useResponsesApi: "Responses API 사용",
           outputVersion: "출력 버전 (선택 사항)",
           maxTokens: "최대 토큰 (선택 사항)",
@@ -1327,6 +1362,8 @@ export const ko: Translations = {
   // Thread error messages
   threadErrors: {
     rateLimited: "모델 요청 속도가 제한되었습니다. 나중에 다시 시도해 주세요.",
+    conversationSummarized: "대화가 자동으로 요약되었으며 주요 내용이 보존되었습니다",
+    conversationSummarizedDesc: "긴 대화 기록이 요약으로 압축되었으며 대화 연속성이 유지됩니다",
     authFailed: "모델 인증에 실패했습니다. API 키 구성을 확인해 주세요.",
     contentTooLong: "입력 내용이 너무 길어 모델 컨텍스트 제한을 초과했습니다. 입력을 줄이고 다시 시도해 주세요.",
     invalidResponse: "모델이 유효하지 않은 응답을 반환했습니다. 다시 시도해 주세요.",
@@ -1662,6 +1699,13 @@ export const ko: Translations = {
       edit: "편집",
       delete: "삭제",
       deleting: "삭제 중...",
+      detailViewHint: "스킬 이름을 클릭하면 새 탭에서 세부 정보를 보고 편집할 수 있습니다.",
+      aiGenerate: "AI 지침 생성",
+      aiGeneratePlaceholder: "에이전트가 수행할 작업을 설명하세요...",
+      aiGenerating: "생성 중...",
+      testChat: "테스트 채팅",
+      testChatPlaceholder: "시뮬레이션된 알림 시나리오를 입력하세요...",
+      testChatHint: "현재 스킬 지침으로 진단 테스트",
     },
     settings: {
       title: "테넌트 설정",

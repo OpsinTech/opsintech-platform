@@ -1,7 +1,7 @@
 "use client";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { ChevronDownIcon, CircleCheck, CircleX, Loader2, MoreHorizontal } from "lucide-react";
+import { ChevronDownIcon, CircleCheck, CircleX, Loader2, MoreHorizontal, SearchIcon } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 
@@ -48,10 +48,22 @@ type GlobalModel = {
   supports_thinking?: boolean;
   supports_reasoning_effort?: boolean;
   supports_vision?: boolean;
+  supports_text2image?: boolean;
   use_responses_api?: boolean | null;
   output_version?: string | null;
   max_tokens?: number | null;
   enabled?: boolean;
+  verify_ssl?: boolean;
+  model_type?: string | null;
+};
+
+const MODEL_TYPES: Record<string, { thinking: boolean; reasoning: boolean; vision: boolean; text2image: boolean }> = {
+  chat: { thinking: true, reasoning: false, vision: false, text2image: false },
+  code: { thinking: false, reasoning: false, vision: false, text2image: false },
+  reasoning: { thinking: true, reasoning: true, vision: false, text2image: false },
+  vision: { thinking: false, reasoning: false, vision: true, text2image: false },
+  text2image: { thinking: false, reasoning: false, vision: false, text2image: true },
+  multimodal: { thinking: true, reasoning: false, vision: true, text2image: false },
 };
 
 type AdminTenant = {
@@ -173,7 +185,10 @@ export default function AdminModelsPage() {
   const [globalSupportsThinking, setGlobalSupportsThinking] = useState(false);
   const [globalSupportsReasoningEffort, setGlobalSupportsReasoningEffort] = useState(false);
   const [globalSupportsVision, setGlobalSupportsVision] = useState(false);
+  const [globalSupportsText2Image, setGlobalSupportsText2Image] = useState(false);
   const [globalProviderId, setGlobalProviderId] = useState("");
+  const [globalVerifySsl, setGlobalVerifySsl] = useState(false);
+  const [globalModelType, setGlobalModelType] = useState("chat");
 
   const [editDisplayName, setEditDisplayName] = useState("");
   const [editProviderModel, setEditProviderModel] = useState("");
@@ -188,7 +203,10 @@ export default function AdminModelsPage() {
   const [editSupportsThinking, setEditSupportsThinking] = useState(false);
   const [editSupportsReasoningEffort, setEditSupportsReasoningEffort] = useState(false);
   const [editSupportsVision, setEditSupportsVision] = useState(false);
+  const [editSupportsText2Image, setEditSupportsText2Image] = useState(false);
   const [editProviderId, setEditProviderId] = useState("");
+  const [editVerifySsl, setEditVerifySsl] = useState(false);
+  const [editModelType, setEditModelType] = useState("chat");
 
   const { data: tenantData } = useAdminTenants();
   const {
@@ -256,12 +274,15 @@ export default function AdminModelsPage() {
   const applyProviderTemplate = (providerId: string, isEdit: boolean) => {
     const template = getProviderById(providerId);
     if (!template) return;
+    const mt = template.defaultModelType || "chat";
     if (isEdit) {
       setEditUse(template.use);
       setEditBaseUrl(template.baseUrl);
       setEditSupportsThinking(template.defaultSupportsThinking);
       setEditSupportsReasoningEffort(template.defaultSupportsReasoningEffort);
       setEditSupportsVision(template.defaultSupportsVision);
+      setEditSupportsText2Image(Boolean(template.defaultSupportsText2Image));
+      setEditModelType(mt);
       setEditProviderId(providerId);
     } else {
       setGlobalUse(template.use);
@@ -269,6 +290,8 @@ export default function AdminModelsPage() {
       setGlobalSupportsThinking(template.defaultSupportsThinking);
       setGlobalSupportsReasoningEffort(template.defaultSupportsReasoningEffort);
       setGlobalSupportsVision(template.defaultSupportsVision);
+      setGlobalSupportsText2Image(Boolean(template.defaultSupportsText2Image));
+      setGlobalModelType(mt);
       setGlobalProviderId(providerId);
     }
   };
@@ -316,7 +339,10 @@ export default function AdminModelsPage() {
           supports_thinking: globalSupportsThinking,
           supports_reasoning_effort: globalSupportsReasoningEffort,
           supports_vision: globalSupportsVision,
+          supports_text2image: globalSupportsText2Image,
           enabled: globalEnabled,
+          verify_ssl: globalVerifySsl,
+          model_type: globalModelType || undefined,
         }),
       });
       if (!res.ok) {
@@ -338,7 +364,10 @@ export default function AdminModelsPage() {
       setGlobalSupportsThinking(false);
       setGlobalSupportsReasoningEffort(false);
       setGlobalSupportsVision(false);
+      setGlobalSupportsText2Image(false);
       setGlobalEnabled(true);
+      setGlobalVerifySsl(false);
+      setGlobalModelType("chat");
       setGlobalProviderId("");
       setCreateAdvancedOpen(false);
       setCreatingDialogOpen(false);
@@ -425,6 +454,9 @@ export default function AdminModelsPage() {
     setEditSupportsThinking(Boolean(model.supports_thinking));
     setEditSupportsReasoningEffort(Boolean(model.supports_reasoning_effort));
     setEditSupportsVision(Boolean(model.supports_vision));
+    setEditSupportsText2Image(Boolean(model.supports_text2image));
+    setEditVerifySsl(model.verify_ssl !== false);
+    setEditModelType(model.model_type || "chat");
     // 尝试根据 use 值反推厂商模板
     const matchedProvider = PROVIDER_TEMPLATES.find(p =>
       model.use === p.use || model.use?.startsWith(p.id)
@@ -464,7 +496,10 @@ export default function AdminModelsPage() {
           supports_thinking: editSupportsThinking,
           supports_reasoning_effort: editSupportsReasoningEffort,
           supports_vision: editSupportsVision,
+          supports_text2image: editSupportsText2Image,
           enabled: editEnabled,
+          verify_ssl: editVerifySsl,
+          model_type: editModelType || undefined,
         }),
       });
       if (!res.ok) {
@@ -492,6 +527,7 @@ export default function AdminModelsPage() {
         base_url: globalBaseUrl.trim() || undefined,
         api_key: globalApiKey.trim() || undefined,
         max_tokens: 32,
+        verify_ssl: globalVerifySsl,
       });
       setCreateTestResult(result);
     } catch (err) {
@@ -514,6 +550,7 @@ export default function AdminModelsPage() {
         base_url: editBaseUrl.trim() || undefined,
         api_key: editApiKey.trim() || undefined,
         max_tokens: 32,
+        verify_ssl: editVerifySsl,
       });
       setEditTestResult(result);
     } catch (err) {
@@ -645,7 +682,7 @@ export default function AdminModelsPage() {
   };
 
   return (
-    <div className="flex-1 overflow-auto p-8 space-y-8">
+    <div className="flex-1 space-y-6">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">{t.admin.models.title}</h1>
@@ -656,13 +693,14 @@ export default function AdminModelsPage() {
         <Button onClick={() => setCreatingDialogOpen(true)}>{t.admin.models.createGlobalModel}</Button>
       </div>
 
-      <div className="w-full md:max-w-sm">
+      <div className="relative w-full md:max-w-sm">
+        <SearchIcon className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
         <input
           type="text"
           placeholder={t.admin.models.searchPlaceholder}
           value={keyword}
           onChange={(e) => setKeyword(e.target.value)}
-          className="h-9 w-full rounded-md border border-zinc-200 bg-white px-3 text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500 dark:border-zinc-800 dark:bg-zinc-900"
+          className="h-9 w-full rounded-md border border-zinc-200 bg-white pl-9 pr-3 text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500 dark:border-zinc-800 dark:bg-zinc-900"
         />
       </div>
 
@@ -718,7 +756,8 @@ export default function AdminModelsPage() {
                         {m.supports_thinking && <span className="text-xs rounded border px-1.5 py-0.5">{t.admin.models.capabilitiesLabels.thinking}</span>}
                         {m.supports_reasoning_effort && <span className="text-xs rounded border px-1.5 py-0.5">{t.admin.models.capabilitiesLabels.reasoningEffort}</span>}
                         {m.supports_vision && <span className="text-xs rounded border px-1.5 py-0.5">{t.admin.models.capabilitiesLabels.vision}</span>}
-                        {!m.supports_thinking && !m.supports_reasoning_effort && !m.supports_vision && (
+                        {m.supports_text2image && <span className="text-xs rounded border px-1.5 py-0.5">{t.admin.models.capabilitiesLabels.text2image}</span>}
+                        {!m.supports_thinking && !m.supports_reasoning_effort && !m.supports_vision && !m.supports_text2image && (
                           <span className="text-xs text-zinc-500">-</span>
                         )}
                       </div>
@@ -829,6 +868,29 @@ export default function AdminModelsPage() {
                     )}
                   </div>
                   <div className="flex flex-col gap-1.5">
+                    <label className="text-sm font-medium leading-none">模型类型</label>
+                    <Select value={globalModelType} onValueChange={(v) => {
+                      setGlobalModelType(v);
+                      const preset = MODEL_TYPES[v];
+                      if (preset) {
+                        setGlobalSupportsThinking(preset.thinking);
+                        setGlobalSupportsReasoningEffort(preset.reasoning);
+                        setGlobalSupportsVision(preset.vision);
+                        setGlobalSupportsText2Image(preset.text2image);
+                      }
+                    }}>
+                      <SelectTrigger size="sm" className="h-9 w-full"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="chat">对话 (Chat)</SelectItem>
+                        <SelectItem value="code">代码 (Code)</SelectItem>
+                        <SelectItem value="reasoning">推理 (Reasoning)</SelectItem>
+                        <SelectItem value="vision">视觉 (Vision)</SelectItem>
+                        <SelectItem value="text2image">文生图 (Text-to-Image)</SelectItem>
+                        <SelectItem value="multimodal">多模态 (Multimodal)</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="flex flex-col gap-1.5">
                     <label className="text-sm font-medium leading-none" htmlFor="global-model-name">
                       {t.admin.models.createDialog.globalModelId} <span className="text-destructive">*</span>
                     </label>
@@ -913,6 +975,10 @@ export default function AdminModelsPage() {
                       onChange={(e) => setGlobalMaxTokens(e.target.value)}
                     />
                   </div>
+                  <label className="flex items-center justify-between rounded-lg border px-3 py-2 sm:col-span-2">
+                    <span className="text-sm">{t.admin.models.createDialog.sslVerification}</span>
+                    <Switch checked={globalVerifySsl} onCheckedChange={setGlobalVerifySsl} />
+                  </label>
                 </div>
               </div>
 
@@ -965,7 +1031,7 @@ export default function AdminModelsPage() {
               {/* 能力与状态 */}
               <div className="space-y-2">
                 <h3 className="text-sm font-medium text-muted-foreground">{t.admin.models.createDialog.capabilitiesTitle}</h3>
-                <div className="grid gap-2 sm:grid-cols-3">
+                <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
                   <label className="flex items-center justify-between rounded-lg border px-3 py-2">
                     <span className="text-sm">{t.admin.models.createDialog.thinking}</span>
                     <Switch checked={globalSupportsThinking} onCheckedChange={setGlobalSupportsThinking} />
@@ -977,6 +1043,10 @@ export default function AdminModelsPage() {
                   <label className="flex items-center justify-between rounded-lg border px-3 py-2">
                     <span className="text-sm">{t.admin.models.createDialog.vision}</span>
                     <Switch checked={globalSupportsVision} onCheckedChange={setGlobalSupportsVision} />
+                  </label>
+                  <label className="flex items-center justify-between rounded-lg border px-3 py-2">
+                    <span className="text-sm">{t.admin.models.createDialog.text2image}</span>
+                    <Switch checked={globalSupportsText2Image} onCheckedChange={setGlobalSupportsText2Image} />
                   </label>
                 </div>
                 <label className="flex items-center justify-between rounded-lg border px-3 py-2">
@@ -1069,6 +1139,29 @@ export default function AdminModelsPage() {
                     )}
                   </div>
                   <div className="flex flex-col gap-1.5">
+                    <label className="text-sm font-medium leading-none">模型类型</label>
+                    <Select value={editModelType} onValueChange={(v) => {
+                      setEditModelType(v);
+                      const preset = MODEL_TYPES[v];
+                      if (preset) {
+                        setEditSupportsThinking(preset.thinking);
+                        setEditSupportsReasoningEffort(preset.reasoning);
+                        setEditSupportsVision(preset.vision);
+                        setEditSupportsText2Image(preset.text2image);
+                      }
+                    }}>
+                      <SelectTrigger size="sm" className="h-9 w-full"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="chat">对话 (Chat)</SelectItem>
+                        <SelectItem value="code">代码 (Code)</SelectItem>
+                        <SelectItem value="reasoning">推理 (Reasoning)</SelectItem>
+                        <SelectItem value="vision">视觉 (Vision)</SelectItem>
+                        <SelectItem value="text2image">文生图 (Text-to-Image)</SelectItem>
+                        <SelectItem value="multimodal">多模态 (Multimodal)</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="flex flex-col gap-1.5">
                     <label className="text-sm font-medium leading-none" htmlFor="edit-model-name">{t.admin.models.createDialog.globalModelId}</label>
                     <Input id="edit-model-name" value={editingModelName} disabled className="bg-muted/50" />
                   </div>
@@ -1099,6 +1192,10 @@ export default function AdminModelsPage() {
                     <label className="text-sm font-medium leading-none" htmlFor="edit-max-tokens">{t.admin.models.createDialog.maxTokens}</label>
                     <Input id="edit-max-tokens" inputMode="numeric" placeholder={t.admin.models.createDialog.maxTokensPlaceholder} value={editMaxTokens} onChange={(e) => setEditMaxTokens(e.target.value)} />
                   </div>
+                  <label className="flex items-center justify-between rounded-lg border px-3 py-2 sm:col-span-2">
+                    <span className="text-sm">{t.admin.models.createDialog.sslVerification}</span>
+                    <Switch checked={editVerifySsl} onCheckedChange={setEditVerifySsl} />
+                  </label>
                 </div>
               </div>
 
@@ -1151,7 +1248,7 @@ export default function AdminModelsPage() {
               {/* 能力与状态 */}
               <div className="space-y-2">
                 <h3 className="text-sm font-medium text-muted-foreground">{t.admin.models.createDialog.capabilitiesTitle}</h3>
-                <div className="grid gap-2 sm:grid-cols-3">
+                <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
                   <label className="flex items-center justify-between rounded-lg border px-3 py-2">
                     <span className="text-sm">{t.admin.models.createDialog.thinking}</span>
                     <Switch checked={editSupportsThinking} onCheckedChange={setEditSupportsThinking} />
@@ -1163,6 +1260,10 @@ export default function AdminModelsPage() {
                   <label className="flex items-center justify-between rounded-lg border px-3 py-2">
                     <span className="text-sm">{t.admin.models.createDialog.vision}</span>
                     <Switch checked={editSupportsVision} onCheckedChange={setEditSupportsVision} />
+                  </label>
+                  <label className="flex items-center justify-between rounded-lg border px-3 py-2">
+                    <span className="text-sm">{t.admin.models.createDialog.text2image}</span>
+                    <Switch checked={editSupportsText2Image} onCheckedChange={setEditSupportsText2Image} />
                   </label>
                 </div>
                 <label className="flex items-center justify-between rounded-lg border px-3 py-2">

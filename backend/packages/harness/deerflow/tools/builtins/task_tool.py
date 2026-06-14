@@ -121,12 +121,18 @@ def task_tool(
 
     # Start background execution (always async to prevent blocking)
     # Use tool_call_id as task_id for better traceability
-    task_id = executor.execute_async(prompt, task_id=tool_call_id)
+    task_id = executor.execute_async(
+        prompt,
+        task_id=tool_call_id,
+        description=description,
+        prompt=prompt,
+    )
 
     # Poll for task completion in backend (removes need for LLM to poll)
     poll_count = 0
     last_status = None
     last_message_count = 0  # Track how many AI messages we've already sent
+    last_started_at = None  # Track started_at to emit event once available
     # Polling timeout: execution timeout + 60s buffer, checked every 5s
     max_poll_count = (config.timeout_seconds + 60) // 5
 
@@ -134,7 +140,15 @@ def task_tool(
 
     writer = get_stream_writer()
     # Send Task Started message'
-    writer({"type": "task_started", "task_id": task_id, "description": description})
+    writer(
+        {
+            "type": "task_started",
+            "task_id": task_id,
+            "description": description,
+            "timeout_seconds": config.timeout_seconds,
+            "max_turns": config.max_turns,
+        }
+    )
 
     while True:
         result = get_background_task_result(task_id)
@@ -168,19 +182,57 @@ def task_tool(
                 logger.info(f"[trace={trace_id}] Task {task_id} sent message #{i + 1}/{current_message_count}")
             last_message_count = current_message_count
 
+        # Emit task_started again once started_at becomes available (set by run_task)
+        if result.started_at is not None and last_started_at is None:
+            last_started_at = result.started_at
+            writer(
+                {
+                    "type": "task_started",
+                    "task_id": task_id,
+                    "description": description,
+                    "timeout_seconds": config.timeout_seconds,
+                    "max_turns": config.max_turns,
+                    "started_at": result.started_at.isoformat(),
+                }
+            )
+
         # Check if task completed, failed, or timed out
         if result.status == SubagentStatus.COMPLETED:
-            writer({"type": "task_completed", "task_id": task_id, "result": result.result})
+            writer(
+                {
+                    "type": "task_completed",
+                    "task_id": task_id,
+                    "result": result.result,
+                    "started_at": result.started_at.isoformat() if result.started_at else None,
+                    "completed_at": result.completed_at.isoformat() if result.completed_at else None,
+                }
+            )
             logger.info(f"[trace={trace_id}] Task {task_id} completed after {poll_count} polls")
             cleanup_background_task(task_id)
             return f"Task Succeeded. Result: {result.result}"
         elif result.status == SubagentStatus.FAILED:
-            writer({"type": "task_failed", "task_id": task_id, "error": result.error})
+            writer(
+                {
+                    "type": "task_failed",
+                    "task_id": task_id,
+                    "error": result.error,
+                    "started_at": result.started_at.isoformat() if result.started_at else None,
+                    "completed_at": result.completed_at.isoformat() if result.completed_at else None,
+                }
+            )
             logger.error(f"[trace={trace_id}] Task {task_id} failed: {result.error}")
             cleanup_background_task(task_id)
             return f"Task failed. Error: {result.error}"
         elif result.status == SubagentStatus.TIMED_OUT:
-            writer({"type": "task_timed_out", "task_id": task_id, "error": result.error})
+            writer(
+                {
+                    "type": "task_timed_out",
+                    "task_id": task_id,
+                    "error": result.error,
+                    "started_at": result.started_at.isoformat() if result.started_at else None,
+                    "completed_at": result.completed_at.isoformat() if result.completed_at else None,
+                }
+            )
             logger.warning(f"[trace={trace_id}] Task {task_id} timed out: {result.error}")
             cleanup_background_task(task_id)
             return f"Task timed out. Error: {result.error}"

@@ -260,7 +260,7 @@ def load_platform_models_from_db() -> list[dict]:
             db_url,
             """
             SELECT name, model, "use", display_name, description, 
-                   supports_thinking, supports_reasoning_effort, supports_vision, settings
+                   supports_thinking, supports_reasoning_effort, supports_vision, supports_text2image, max_input_tokens, settings
             FROM tenant_model_configs
             WHERE user_id = :owner_id AND tenant_id IS NULL
             ORDER BY id
@@ -288,6 +288,8 @@ def load_platform_models_from_db() -> list[dict]:
             "supports_thinking": bool(row.get("supports_thinking", False)),
             "supports_reasoning_effort": bool(row.get("supports_reasoning_effort", False)),
             "supports_vision": bool(row.get("supports_vision", False)),
+            "supports_text2image": bool(row.get("supports_text2image", False)),
+            "max_input_tokens": row.get("max_input_tokens"),
         }
         model_config.update({k: v for k, v in settings.items() if k not in model_config})
         if "supports_tools" not in model_config:
@@ -397,7 +399,7 @@ def load_user_config_payload(user_id: str, tenant_id: str | None = None) -> tupl
             db_url,
             f"""
             SELECT name, model, "use", display_name, description, supports_thinking,
-                   supports_reasoning_effort, supports_vision, settings
+                   supports_reasoning_effort, supports_vision, supports_text2image, max_input_tokens, settings
             FROM tenant_model_configs
             WHERE user_id = :user_id AND {_scope_where_clause(tenant_id)}
             ORDER BY id
@@ -410,10 +412,10 @@ def load_user_config_payload(user_id: str, tenant_id: str | None = None) -> tupl
                 tenant_shared_model_rows = _query_rows(
                     db_url,
                     """
-                    SELECT name, model, "use", display_name, description, supports_thinking,
-                           supports_reasoning_effort, supports_vision, settings
-                    FROM tenant_model_configs
-                    WHERE user_id = :owner_id AND tenant_id = :tenant_id
+                     SELECT name, model, "use", display_name, description, supports_thinking,
+                            supports_reasoning_effort, supports_vision, supports_text2image, max_input_tokens, settings
+                     FROM tenant_model_configs
+                     WHERE user_id = :owner_id AND tenant_id = :tenant_id
                     ORDER BY id
                     """,
                     {"owner_id": _tenant_shared_model_owner_id(str(tenant_id)), "tenant_id": tenant_id},
@@ -493,6 +495,8 @@ def load_user_config_payload(user_id: str, tenant_id: str | None = None) -> tupl
                         "supports_thinking": bool(item["supports_thinking"]),
                         "supports_reasoning_effort": bool(item["supports_reasoning_effort"]),
                         "supports_vision": bool(item["supports_vision"]),
+                        "supports_text2image": bool(item["supports_text2image"]),
+                        "max_input_tokens": item.get("max_input_tokens"),
                         "supports_tools": bool(settings.get("supports_tools", True)),
                     }
                 )

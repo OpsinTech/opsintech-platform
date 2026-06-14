@@ -1,16 +1,21 @@
-"""CRUD API for custom agents."""
+"""CRUD API for custom agents — DB-backed."""
 
 import logging
 import re
-import shutil
+import uuid
 
-import yaml
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request, Query
 from pydantic import BaseModel, Field
+from sqlalchemy import select as sa_select
+from sqlalchemy.exc import IntegrityError
+from sqlmodel.ext.asyncio.session import AsyncSession
 
-from app.gateway.authorization import require_tenant_context
-from deerflow.config.agents_config import AgentConfig, list_custom_agents, load_agent_config, load_agent_soul
+from app.gateway.authorization import require_tenant_context, _is_tenant_admin
+from app.models.agents import CustomAgent
+from deerflow.config.agents_config import AgentConfig
 from deerflow.config.paths import get_paths
+from deerflow.database.session import get_session
+from deerflow.skills import load_skills
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api", tags=["agents"])
@@ -18,18 +23,33 @@ router = APIRouter(prefix="/api", tags=["agents"])
 AGENT_NAME_PATTERN = re.compile(r"^[A-Za-z0-9-]+$")
 
 
+# ---------------------------------------------------------------------------
+# Response / Request models
+# ---------------------------------------------------------------------------
+
+
 class AgentResponse(BaseModel):
     """Response model for a custom agent."""
 
+    id: str = Field(..., description="UUID")
     name: str = Field(..., description="Agent name (hyphen-case)")
     description: str = Field(default="", description="Agent description")
     model: str | None = Field(default=None, description="Optional model override")
     tool_groups: list[str] | None = Field(default=None, description="Optional tool group whitelist")
-    soul: str | None = Field(default=None, description="SOUL.md content (included on GET /{name})")
+    system_prompt: str | None = Field(default=None, description="Agent personality and behavioral guardrails")
+    skills: list[str] = Field(default_factory=list, description="Allowed skill SOPs")
+    enabled: bool = Field(default=True, description="Whether the agent is active")
+    tags: list[str] = Field(default_factory=list, description="Filter labels")
+    created_by: str | None = Field(default=None, description="Creator user ID")
+    created_at: str | None = Field(default=None, description="ISO timestamp")
+    updated_at: str | None = Field(default=None, description="ISO timestamp")
+    is_shared: bool = Field(default=False, description="Whether the agent is shared with the tenant")
+    # Deprecated alias
+    soul: str | None = Field(default=None, description="Deprecated — use system_prompt")
 
 
 class AgentsListResponse(BaseModel):
-    """Response model for listing all custom agents."""
+    """Response model for listing agents."""
 
     agents: list[AgentResponse]
 
@@ -41,27 +61,63 @@ class AgentCreateRequest(BaseModel):
     description: str = Field(default="", description="Agent description")
     model: str | None = Field(default=None, description="Optional model override")
     tool_groups: list[str] | None = Field(default=None, description="Optional tool group whitelist")
-    soul: str = Field(default="", description="SOUL.md content — agent personality and behavioral guardrails")
+    system_prompt: str = Field(default="", description="Agent personality and behavioral guardrails")
+    skills: list[str] = Field(default_factory=list, description="Allowed skill SOPs (empty = all available)")
+    tags: list[str] = Field(default_factory=list, description="Filter labels")
+    enabled: bool = Field(default=True, description="Enable or disable the agent")
+    is_shared: bool = Field(default=False, description="Whether the agent is shared with the tenant")
+    # Deprecated field — accepted but mapped to system_prompt
+    soul: str | None = Field(default=None, description="Deprecated — use system_prompt")
 
 
 class AgentUpdateRequest(BaseModel):
-    """Request body for updating a custom agent."""
+    """Request body for updating a custom agent. All fields optional."""
 
     description: str | None = Field(default=None, description="Updated description")
     model: str | None = Field(default=None, description="Updated model override")
     tool_groups: list[str] | None = Field(default=None, description="Updated tool group whitelist")
-    soul: str | None = Field(default=None, description="Updated SOUL.md content")
+    system_prompt: str | None = Field(default=None, description="Updated agent personality")
+    skills: list[str] | None = Field(default=None, description="Updated skill whitelist")
+    enabled: bool | None = Field(default=None, description="Enable or disable the agent")
+    tags: list[str] | None = Field(default=None, description="Updated filter labels")
+    is_shared: bool | None = Field(default=None, description="Whether the agent is shared with the tenant")
+    # Deprecated field
+    soul: str | None = Field(default=None, description="Deprecated — use system_prompt")
+
+
+class UserProfileResponse(BaseModel):
+    """Response model for the global user profile (USER.md)."""
+
+    content: str | None = Field(default=None, description="USER.md content")
+
+
+class UserProfileUpdateRequest(BaseModel):
+    """Request body for setting the global user profile."""
+
+    content: str = Field(default="", description="USER.md content")
+
+
+class SkillResponse(BaseModel):
+    """Response model for an installed skill."""
+
+    name: str
+    description: str
+    category: str
+    enabled: bool
+
+
+class SkillsListResponse(BaseModel):
+    """Response model for listing skills."""
+
+    skills: list[SkillResponse]
+
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
 
 
 def _validate_agent_name(name: str) -> None:
-    """Validate agent name against allowed pattern.
-
-    Args:
-        name: The agent name to validate.
-
-    Raises:
-        HTTPException: 422 if the name is invalid.
-    """
     if not AGENT_NAME_PATTERN.match(name):
         raise HTTPException(
             status_code=422,
@@ -70,121 +126,143 @@ def _validate_agent_name(name: str) -> None:
 
 
 def _normalize_agent_name(name: str) -> str:
-    """Normalize agent name to lowercase for filesystem storage."""
     return name.lower()
 
 
-def _agent_config_to_response(agent_cfg: AgentConfig, include_soul: bool = False, user_id: str | None = None) -> AgentResponse:
-    """Convert AgentConfig to AgentResponse."""
-    soul: str | None = None
-    if include_soul:
-        soul = load_agent_soul(agent_cfg.name, user_id=user_id) or ""
-
+def _agent_to_response(agent: CustomAgent) -> AgentResponse:
     return AgentResponse(
-        name=agent_cfg.name,
-        description=agent_cfg.description,
-        model=agent_cfg.model,
-        tool_groups=agent_cfg.tool_groups,
-        soul=soul,
+        id=agent.id,
+        name=agent.name,
+        description=agent.description or "",
+        model=agent.model,
+        tool_groups=agent.tool_groups or [],
+        system_prompt=agent.system_prompt or None,
+        skills=agent.skills or [],
+        enabled=agent.enabled,
+        tags=agent.tags or [],
+        created_by=agent.created_by,
+        created_at=agent.created_at.isoformat() if agent.created_at else None,
+        updated_at=agent.updated_at.isoformat() if agent.updated_at else None,
+        is_shared=agent.user_id == "tenant-shared",
+        soul=agent.system_prompt or None,
     )
 
 
-def _require_user_id(request: Request) -> str:
+def _get_user_id(request: Request) -> str:
     user_id = getattr(request.state, "user_id", None)
     if not user_id:
         raise HTTPException(status_code=401, detail="Authentication required")
-    require_tenant_context(request)
     return user_id
+
+
+# ---------------------------------------------------------------------------
+# Agent CRUD endpoints
+# ---------------------------------------------------------------------------
 
 
 @router.get(
     "/agents",
     response_model=AgentsListResponse,
     summary="List Custom Agents",
-    description="List all custom agents available in the agents directory.",
 )
-async def list_agents(request: Request) -> AgentsListResponse:
-    """List all custom agents.
+async def list_agents(
+    request: Request,
+    show_all: bool = Query(default=False, description="Show all tenant agents for discoverability"),
+    tag: str | None = Query(default=None, description="Filter by tag"),
+    skill: str | None = Query(default=None, description="Filter by skill"),
+    session: AsyncSession = Depends(get_session),
+) -> AgentsListResponse:
+    tenant_id = require_tenant_context(request)
+    user_id = _get_user_id(request)
 
-    Returns:
-        List of all custom agents with their metadata (without soul content).
-    """
-    try:
-        user_id = _require_user_id(request)
-        tenant_id = getattr(request.state, "tenant_id", None)
-        agents = list_custom_agents(user_id=user_id, tenant_id=tenant_id)
-        return AgentsListResponse(agents=[_agent_config_to_response(a) for a in agents])
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Failed to list agents: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Failed to list agents: {str(e)}")
+    query = sa_select(CustomAgent).where(
+        CustomAgent.tenant_id == tenant_id,
+    )
+
+    is_admin = _is_tenant_admin(request)
+    if is_admin:
+        if not show_all:
+            query = query.where(
+                (CustomAgent.user_id == user_id) | (CustomAgent.user_id == "tenant-shared")
+            )
+    else:
+        if show_all:
+            query = query.where(CustomAgent.user_id != "tenant-shared")
+        else:
+            query = query.where(CustomAgent.user_id == user_id)
+
+    result = await session.exec(query.order_by(CustomAgent.name))
+    agents = result.scalars().all()
+
+    # Client-side tag/skill filtering
+    if tag:
+        tag_lower = tag.lower()
+        agents = [a for a in agents if any(tag_lower in t.lower() for t in (a.tags or []))]
+    if skill:
+        agents = [a for a in agents if skill in (a.skills or [])]
+
+    return AgentsListResponse(agents=[_agent_to_response(a) for a in agents])
 
 
 @router.get(
     "/agents/check",
-    summary="Check Agent Name",
-    description="Validate an agent name and check if it is available (case-insensitive).",
+    summary="Check Agent Name Availability",
 )
-async def check_agent_name(name: str, request: Request) -> dict:
-    """Check whether an agent name is valid and not yet taken.
-
-    Args:
-        name: The agent name to check.
-
-    Returns:
-        ``{"available": true/false, "name": "<normalized>"}``
-
-    Raises:
-        HTTPException: 422 if the name is invalid.
-    """
+async def check_agent_name(
+    name: str,
+    request: Request,
+    is_shared: bool = Query(default=False, description="Check availability for shared agent"),
+    session: AsyncSession = Depends(get_session),
+) -> dict:
     _validate_agent_name(name)
-    user_id = _require_user_id(request)
-    tenant_id = getattr(request.state, "tenant_id", None)
+    tenant_id = require_tenant_context(request)
+    user_id = _get_user_id(request)
     normalized = _normalize_agent_name(name)
-    available = not get_paths().agent_dir(normalized, user_id=user_id, tenant_id=tenant_id).exists()
-    return {"available": available, "name": normalized}
+
+    target_user_id = "tenant-shared" if (is_shared and _is_tenant_admin(request)) else user_id
+
+    result = await session.exec(
+        sa_select(CustomAgent).where(
+            CustomAgent.tenant_id == tenant_id,
+            CustomAgent.user_id == target_user_id,
+            CustomAgent.name == normalized,
+        )
+    )
+    existing = result.scalars().first()
+    return {"available": existing is None, "name": normalized}
 
 
 @router.get(
     "/agents/{name}",
     response_model=AgentResponse,
     summary="Get Custom Agent",
-    description="Retrieve details and SOUL.md content for a specific custom agent.",
 )
-async def get_agent(name: str, request: Request) -> AgentResponse:
-    """Get a specific custom agent by name.
-
-    Args:
-        name: The agent name.
-
-    Returns:
-        Agent details including SOUL.md content.
-
-    Raises:
-        HTTPException: 404 if agent not found.
-    """
+async def get_agent(
+    name: str,
+    request: Request,
+    session: AsyncSession = Depends(get_session),
+) -> AgentResponse:
     _validate_agent_name(name)
     name = _normalize_agent_name(name)
-    user_id = _require_user_id(request)
-    tenant_id = getattr(request.state, "tenant_id", None)
+    tenant_id = require_tenant_context(request)
+    user_id = _get_user_id(request)
 
-    try:
-        agent_cfg = load_agent_config(name, user_id=user_id, tenant_id=tenant_id)
-        return AgentResponse(
-            name=agent_cfg.name,
-            description=agent_cfg.description,
-            model=agent_cfg.model,
-            tool_groups=agent_cfg.tool_groups,
-            soul=load_agent_soul(agent_cfg.name, user_id=user_id, tenant_id=tenant_id) or "",
+    user_ids = [user_id]
+    if _is_tenant_admin(request):
+        user_ids.append("tenant-shared")
+
+    result = await session.exec(
+        sa_select(CustomAgent).where(
+            CustomAgent.tenant_id == tenant_id,
+            CustomAgent.user_id.in_(user_ids),
+            CustomAgent.name == name,
         )
-    except FileNotFoundError:
+    )
+    agent = result.scalars().first()
+
+    if agent is None:
         raise HTTPException(status_code=404, detail=f"Agent '{name}' not found")
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Failed to get agent '{name}': {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Failed to get agent: {str(e)}")
+    return _agent_to_response(agent)
 
 
 @router.post(
@@ -192,172 +270,269 @@ async def get_agent(name: str, request: Request) -> AgentResponse:
     response_model=AgentResponse,
     status_code=201,
     summary="Create Custom Agent",
-    description="Create a new custom agent with its config and SOUL.md.",
 )
-async def create_agent_endpoint(request: AgentCreateRequest, api_request: Request) -> AgentResponse:
-    """Create a new custom agent.
+async def create_agent_endpoint(
+    body: AgentCreateRequest,
+    request: Request,
+    session: AsyncSession = Depends(get_session),
+) -> AgentResponse:
+    _validate_agent_name(body.name)
+    tenant_id = require_tenant_context(request)
+    user_id = _get_user_id(request)
+    normalized_name = _normalize_agent_name(body.name)
 
-    Args:
-        request: The agent creation request.
+    is_admin = _is_tenant_admin(request)
+    if body.is_shared and not is_admin:
+        raise HTTPException(status_code=403, detail="Only tenant admins can create shared agents")
 
-    Returns:
-        The created agent details.
+    target_user_id = "tenant-shared" if body.is_shared else user_id
 
-    Raises:
-        HTTPException: 409 if agent already exists, 422 if name is invalid.
-    """
-    _validate_agent_name(request.name)
-    user_id = _require_user_id(api_request)
-    tenant_id = getattr(api_request.state, "tenant_id", None)
-    normalized_name = _normalize_agent_name(request.name)
+    system_prompt = (body.system_prompt or body.soul or "").strip()
+    if not system_prompt:
+        raise HTTPException(status_code=422, detail="system_prompt is required and must not be empty")
 
-    agent_dir = get_paths().agent_dir(normalized_name, user_id=user_id, tenant_id=tenant_id)
-
-    if agent_dir.exists():
+    # Check uniqueness
+    result = await session.exec(
+        sa_select(CustomAgent).where(
+            CustomAgent.tenant_id == tenant_id,
+            CustomAgent.user_id == target_user_id,
+            CustomAgent.name == normalized_name,
+        )
+    )
+    if result.scalars().first() is not None:
         raise HTTPException(status_code=409, detail=f"Agent '{normalized_name}' already exists")
 
+    agent = CustomAgent(
+        id=str(uuid.uuid4()),
+        tenant_id=tenant_id,
+        user_id=target_user_id,
+        name=normalized_name,
+        description=body.description or "",
+        model=body.model,
+        tool_groups=body.tool_groups or [],
+        system_prompt=system_prompt,
+        skills=body.skills or [],
+        tags=body.tags or [],
+        enabled=body.enabled,
+        created_by=user_id,
+    )
+
+    session.add(agent)
     try:
-        agent_dir.mkdir(parents=True, exist_ok=True)
+        await session.commit()
+    except IntegrityError:
+        await session.rollback()
+        raise HTTPException(status_code=409, detail=f"Agent '{normalized_name}' already exists")
+    await session.refresh(agent)
 
-        # Write config.yaml
-        config_data: dict = {"name": normalized_name}
-        if request.description:
-            config_data["description"] = request.description
-        if request.model is not None:
-            config_data["model"] = request.model
-        if request.tool_groups is not None:
-            config_data["tool_groups"] = request.tool_groups
+    from deerflow.config.agents_config import load_agent_config
+    load_agent_config.cache_clear()
 
-        config_file = agent_dir / "config.yaml"
-        with open(config_file, "w", encoding="utf-8") as f:
-            yaml.dump(config_data, f, default_flow_style=False, allow_unicode=True)
-
-        # Write SOUL.md
-        soul_file = agent_dir / "SOUL.md"
-        soul_file.write_text(request.soul, encoding="utf-8")
-
-        logger.info(f"Created agent '{normalized_name}' at {agent_dir}")
-
-        agent_cfg = load_agent_config(normalized_name, user_id=user_id, tenant_id=tenant_id)
-        return AgentResponse(
-            name=agent_cfg.name,
-            description=agent_cfg.description,
-            model=agent_cfg.model,
-            tool_groups=agent_cfg.tool_groups,
-            soul=load_agent_soul(agent_cfg.name, user_id=user_id, tenant_id=tenant_id) or "",
-        )
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        # Clean up on failure
-        if agent_dir.exists():
-            shutil.rmtree(agent_dir)
-        logger.error(f"Failed to create agent '{request.name}': {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Failed to create agent: {str(e)}")
+    logger.info(f"Created agent '{normalized_name}' (id={agent.id}) by user {user_id}")
+    return _agent_to_response(agent)
 
 
 @router.put(
     "/agents/{name}",
     response_model=AgentResponse,
     summary="Update Custom Agent",
-    description="Update an existing custom agent's config and/or SOUL.md.",
 )
-async def update_agent(name: str, request: AgentUpdateRequest, api_request: Request) -> AgentResponse:
-    """Update an existing custom agent.
-
-    Args:
-        name: The agent name.
-        request: The update request (all fields optional).
-
-    Returns:
-        The updated agent details.
-
-    Raises:
-        HTTPException: 404 if agent not found.
-    """
+async def update_agent(
+    name: str,
+    body: AgentUpdateRequest,
+    request: Request,
+    session: AsyncSession = Depends(get_session),
+) -> AgentResponse:
     _validate_agent_name(name)
     name = _normalize_agent_name(name)
-    user_id = _require_user_id(api_request)
-    tenant_id = getattr(api_request.state, "tenant_id", None)
+    tenant_id = require_tenant_context(request)
+    user_id = _get_user_id(request)
 
-    try:
-        agent_cfg = load_agent_config(name, user_id=user_id, tenant_id=tenant_id)
-    except FileNotFoundError:
+    user_ids = [user_id]
+    is_admin = _is_tenant_admin(request)
+    if is_admin:
+        user_ids.append("tenant-shared")
+
+    result = await session.exec(
+        sa_select(CustomAgent).where(
+            CustomAgent.tenant_id == tenant_id,
+            CustomAgent.user_id.in_(user_ids),
+            CustomAgent.name == name,
+        )
+    )
+    agent = result.scalars().first()
+
+    if agent is None:
         raise HTTPException(status_code=404, detail=f"Agent '{name}' not found")
 
-    agent_dir = get_paths().agent_dir(name, user_id=user_id, tenant_id=tenant_id)
+    # Check update permissions
+    if agent.user_id == "tenant-shared" and not is_admin:
+        raise HTTPException(status_code=403, detail="Only tenant admins can update shared agents")
+    if agent.user_id != "tenant-shared" and agent.user_id != user_id:
+        raise HTTPException(status_code=403, detail="Only the agent owner can update this agent")
 
-    try:
-        # Update config if any config fields changed
-        config_changed = any(v is not None for v in [request.description, request.model, request.tool_groups])
+    fields_set = body.model_fields_set
 
-        if config_changed:
-            updated: dict = {
-                "name": agent_cfg.name,
-                "description": request.description if request.description is not None else agent_cfg.description,
-            }
-            new_model = request.model if request.model is not None else agent_cfg.model
-            if new_model is not None:
-                updated["model"] = new_model
+    # If updating shared status
+    if "is_shared" in fields_set and body.is_shared is not None:
+        if not is_admin:
+            raise HTTPException(status_code=403, detail="Only tenant admins can share or unshare agents")
+        target_user_id = "tenant-shared" if body.is_shared else user_id
+        if agent.user_id != target_user_id:
+            # Check for collisions in target scope
+            conflict_result = await session.exec(
+                sa_select(CustomAgent).where(
+                    CustomAgent.tenant_id == tenant_id,
+                    CustomAgent.user_id == target_user_id,
+                    CustomAgent.name == name,
+                )
+            )
+            if conflict_result.scalars().first() is not None:
+                raise HTTPException(status_code=409, detail=f"Agent '{name}' already exists in that scope")
+            agent.user_id = target_user_id
 
-            new_tool_groups = request.tool_groups if request.tool_groups is not None else agent_cfg.tool_groups
-            if new_tool_groups is not None:
-                updated["tool_groups"] = new_tool_groups
+    if body.description is not None:
+        agent.description = body.description
 
-            config_file = agent_dir / "config.yaml"
-            with open(config_file, "w", encoding="utf-8") as f:
-                yaml.dump(updated, f, default_flow_style=False, allow_unicode=True)
+    # Nullable fields: use model_fields_set to distinguish "not provided" from "explicitly cleared"
+    if "model" in fields_set:
+        agent.model = body.model  # None → clear model override
+    if "tool_groups" in fields_set:
+        agent.tool_groups = body.tool_groups or []
+    if "skills" in fields_set:
+        agent.skills = body.skills or []
+    if "tags" in fields_set:
+        agent.tags = body.tags or []
 
-        # Update SOUL.md if provided
-        if request.soul is not None:
-            soul_path = agent_dir / "SOUL.md"
-            soul_path.write_text(request.soul, encoding="utf-8")
+    if body.system_prompt is not None:
+        trimmed = body.system_prompt.strip()
+        if not trimmed:
+            raise HTTPException(status_code=422, detail="system_prompt must not be empty or whitespace-only")
+        agent.system_prompt = trimmed
+    elif body.soul is not None:
+        trimmed = body.soul.strip()
+        if not trimmed:
+            raise HTTPException(status_code=422, detail="system_prompt (soul) must not be empty or whitespace-only")
+        agent.system_prompt = trimmed
+    if body.enabled is not None:
+        agent.enabled = body.enabled
 
-        logger.info(f"Updated agent '{name}'")
+    session.add(agent)
+    await session.commit()
+    await session.refresh(agent)
 
-        refreshed_cfg = load_agent_config(name, user_id=user_id, tenant_id=tenant_id)
-        return AgentResponse(
-            name=refreshed_cfg.name,
-            description=refreshed_cfg.description,
-            model=refreshed_cfg.model,
-            tool_groups=refreshed_cfg.tool_groups,
-            soul=load_agent_soul(refreshed_cfg.name, user_id=user_id, tenant_id=tenant_id) or "",
+    from deerflow.config.agents_config import load_agent_config
+    load_agent_config.cache_clear()
+
+    logger.info(f"Updated agent '{name}' (id={agent.id}) by user {user_id}")
+    return _agent_to_response(agent)
+
+
+@router.delete(
+    "/agents/{name}",
+    status_code=204,
+    summary="Delete Custom Agent",
+)
+async def delete_agent(
+    name: str,
+    request: Request,
+    session: AsyncSession = Depends(get_session),
+) -> None:
+    _validate_agent_name(name)
+    name = _normalize_agent_name(name)
+    tenant_id = require_tenant_context(request)
+    user_id = _get_user_id(request)
+
+    user_ids = [user_id]
+    is_admin = _is_tenant_admin(request)
+    if is_admin:
+        user_ids.append("tenant-shared")
+
+    result = await session.exec(
+        sa_select(CustomAgent).where(
+            CustomAgent.tenant_id == tenant_id,
+            CustomAgent.user_id.in_(user_ids),
+            CustomAgent.name == name,
+        )
+    )
+    agent = result.scalars().first()
+
+    if agent is None:
+        raise HTTPException(status_code=404, detail=f"Agent '{name}' not found")
+
+    if agent.user_id == "tenant-shared" and not is_admin:
+        raise HTTPException(status_code=403, detail="Only tenant admins can delete shared agents")
+    if agent.user_id != "tenant-shared" and agent.user_id != user_id:
+        raise HTTPException(status_code=403, detail="Only the agent owner can delete this agent")
+
+    # Check if any alert sources reference this agent
+    from app.models.alerting import AlertSource
+    ref_result = await session.exec(
+        sa_select(AlertSource).where(
+            AlertSource.tenant_id == tenant_id,
+            AlertSource.config_json["analysis_trigger"]["diagnosis_agent_id"].as_string() == agent.id,
+        )
+    )
+    ref_sources = ref_result.scalars().all()
+    if ref_sources:
+        source_names = ", ".join(s.name for s in ref_sources)
+        raise HTTPException(
+            status_code=409,
+            detail=f"无法删除：告警源 ({source_names}) 正在使用此 Agent。请先在告警源中解除绑定后再删除。"
         )
 
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Failed to update agent '{name}': {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Failed to update agent: {str(e)}")
+    await session.delete(agent)
+    await session.commit()
+
+    from deerflow.config.agents_config import load_agent_config
+    load_agent_config.cache_clear()
+
+    logger.info(f"Deleted agent '{name}' (id={agent.id}) by user {user_id}")
 
 
-class UserProfileResponse(BaseModel):
-    """Response model for the global user profile (USER.md)."""
+# ---------------------------------------------------------------------------
+# Skills endpoint
+# ---------------------------------------------------------------------------
 
-    content: str | None = Field(default=None, description="USER.md content, or null if not yet created")
+
+@router.get(
+    "/skills",
+    response_model=SkillsListResponse,
+    summary="List Installed Skills",
+)
+async def list_skills(
+    request: Request,
+) -> SkillsListResponse:
+    require_tenant_context(request)
+    _get_user_id(request)
+
+    skills = load_skills(enabled_only=True)
+    return SkillsListResponse(
+        skills=[
+            SkillResponse(
+                name=s.name,
+                description=s.description,
+                category=s.category,
+                enabled=s.enabled,
+            )
+            for s in skills
+        ]
+    )
 
 
-class UserProfileUpdateRequest(BaseModel):
-    """Request body for setting the global user profile."""
-
-    content: str = Field(default="", description="USER.md content — describes the user's background and preferences")
+# ---------------------------------------------------------------------------
+# User profile endpoints (unchanged — filesystem-based)
+# ---------------------------------------------------------------------------
 
 
 @router.get(
     "/user-profile",
     response_model=UserProfileResponse,
     summary="Get User Profile",
-    description="Read the global USER.md file that is injected into all custom agents.",
 )
 async def get_user_profile(request: Request) -> UserProfileResponse:
-    """Return the current USER.md content.
-
-    Returns:
-        UserProfileResponse with content=None if USER.md does not exist yet.
-    """
     try:
-        user_id = _require_user_id(request)
+        user_id = _get_user_id(request)
         tenant_id = getattr(request.state, "tenant_id", None)
         user_md_path = get_paths().user_md_file(user_id=user_id, tenant_id=tenant_id)
         if not user_md_path.exists():
@@ -379,61 +554,22 @@ async def get_user_profile(request: Request) -> UserProfileResponse:
     "/user-profile",
     response_model=UserProfileResponse,
     summary="Update User Profile",
-    description="Write the global USER.md file that is injected into all custom agents.",
 )
-async def update_user_profile(request: UserProfileUpdateRequest, api_request: Request) -> UserProfileResponse:
-    """Create or overwrite the global USER.md.
-
-    Args:
-        request: The update request with the new USER.md content.
-
-    Returns:
-        UserProfileResponse with the saved content.
-    """
+async def update_user_profile(
+    body: UserProfileUpdateRequest,
+    request: Request,
+) -> UserProfileResponse:
     try:
-        user_id = _require_user_id(api_request)
-        tenant_id = getattr(api_request.state, "tenant_id", None)
+        user_id = _get_user_id(request)
+        tenant_id = getattr(request.state, "tenant_id", None)
         paths = get_paths()
         user_md_path = paths.user_md_file(user_id=user_id, tenant_id=tenant_id)
         user_md_path.parent.mkdir(parents=True, exist_ok=True)
-        user_md_path.write_text(request.content, encoding="utf-8")
+        user_md_path.write_text(body.content, encoding="utf-8")
         logger.info(f"Updated USER.md at {user_md_path}")
-        return UserProfileResponse(content=request.content or None)
+        return UserProfileResponse(content=body.content or None)
     except HTTPException:
         raise
     except Exception as e:
         logger.error(f"Failed to update user profile: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Failed to update user profile: {str(e)}")
-
-
-@router.delete(
-    "/agents/{name}",
-    status_code=204,
-    summary="Delete Custom Agent",
-    description="Delete a custom agent and all its files (config, SOUL.md, memory).",
-)
-async def delete_agent(name: str, request: Request) -> None:
-    """Delete a custom agent.
-
-    Args:
-        name: The agent name.
-
-    Raises:
-        HTTPException: 404 if agent not found.
-    """
-    _validate_agent_name(name)
-    name = _normalize_agent_name(name)
-    user_id = _require_user_id(request)
-    tenant_id = getattr(request.state, "tenant_id", None)
-
-    agent_dir = get_paths().agent_dir(name, user_id=user_id, tenant_id=tenant_id)
-
-    if not agent_dir.exists():
-        raise HTTPException(status_code=404, detail=f"Agent '{name}' not found")
-
-    try:
-        shutil.rmtree(agent_dir)
-        logger.info(f"Deleted agent '{name}' from {agent_dir}")
-    except Exception as e:
-        logger.error(f"Failed to delete agent '{name}': {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Failed to delete agent: {str(e)}")

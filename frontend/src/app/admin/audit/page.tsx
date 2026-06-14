@@ -114,7 +114,7 @@ export default function AuditPage() {
   });
 
   return (
-    <div className="flex-1 overflow-auto p-8">
+    <div className="flex-1 space-y-6">
       <div className="flex items-center justify-between mb-8">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">{t.admin.audit.title}</h1>

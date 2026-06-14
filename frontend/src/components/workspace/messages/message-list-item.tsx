@@ -28,6 +28,7 @@ import {
   extractReasoningContentFromMessage,
   buildRetrySubmissionFromMessage,
   stripUploadedFilesTag,
+  stripSystemContext,
   type FileInMessage,
 } from "@/core/messages/utils";
 import { useRehypeSplitWordsIntoSpans } from "@/core/rehype";
@@ -45,12 +46,14 @@ export function MessageListItem({
   isLoading,
   availableAttachmentKeys,
   onRetry,
+  defaultOpenReasoning = false,
 }: {
   className?: string;
   message: Message;
   isLoading?: boolean;
   availableAttachmentKeys?: Set<string>;
   onRetry?: (message: Message) => void;
+  defaultOpenReasoning?: boolean;
 }) {
   const { t } = useI18n();
   const isHuman = message.type === "human";
@@ -91,6 +94,7 @@ export function MessageListItem({
               message={message}
               isLoading={isLoading}
               availableAttachmentKeys={availableAttachmentKeys}
+              defaultOpenReasoning={defaultOpenReasoning}
             />
           )}
 
@@ -131,7 +135,7 @@ export function MessageListItem({
                   className="rounded-[6px] size-6 hover:bg-black/5 dark:hover:bg-white/10 text-muted-foreground"
                   clipboardData={
                     isHuman
-                      ? stripUploadedFilesTag(extractContentFromMessage(message) || "")
+                      ? stripSystemContext(stripUploadedFilesTag(extractContentFromMessage(message) || ""))
                       : (extractContentFromMessage(message) ??
                         extractReasoningContentFromMessage(message) ??
                         "")
@@ -181,11 +185,13 @@ function MessageContent_({
   message,
   isLoading = false,
   availableAttachmentKeys,
+  defaultOpenReasoning = false,
 }: {
   className?: string;
   message: Message;
   isLoading?: boolean;
   availableAttachmentKeys?: Set<string>;
+  defaultOpenReasoning?: boolean;
 }) {
   const rehypePlugins = useRehypeSplitWordsIntoSpans(isLoading);
   const isHuman = message.type === "human";
@@ -210,7 +216,7 @@ function MessageContent_({
 
   const contentToDisplay = useMemo(() => {
     if (isHuman) {
-      return rawContent ? stripUploadedFilesTag(rawContent) : "";
+      return rawContent ? stripSystemContext(stripUploadedFilesTag(rawContent)) : "";
     }
     return rawContent ?? "";
   }, [rawContent, isHuman]);
@@ -240,7 +246,7 @@ function MessageContent_({
   if (!isHuman && reasoningContent && !rawContent) {
     return (
       <AIElementMessageContent className={className}>
-        <Reasoning isStreaming={isLoading}>
+        <Reasoning isStreaming={isLoading} defaultOpen={defaultOpenReasoning}>
           <ReasoningTrigger />
           <ReasoningContent>{reasoningContent}</ReasoningContent>
         </Reasoning>

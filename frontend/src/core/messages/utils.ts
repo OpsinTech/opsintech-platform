@@ -469,7 +469,7 @@ export function extractAttachmentsFromMessage(message: Message): UploadedFileInf
 
 export function buildRetrySubmissionFromMessage(message: Message) {
   return {
-    text: stripUploadedFilesTag(extractContentFromMessage(message) || "").trim(),
+    text: stripSystemContext(stripUploadedFilesTag(extractContentFromMessage(message) || "")).trim(),
     attachments: extractAttachmentsFromMessage(message),
   };
 }
@@ -529,6 +529,15 @@ export function stripUploadedFilesTag(content: string): string {
   return content
     .replace(/<uploaded_files>[\s\S]*?<\/uploaded_files>/g, "")
     .trim();
+}
+
+export function stripSystemContext(content: string): string {
+  const regex = /\[SYSTEM CONTEXT:[\s\S]*?\]\s*[\s\S]*?\[USER QUERY\]\s*([\s\S]*)/;
+  const match = regex.exec(content);
+  if (match?.[1]) {
+    return match[1].trim();
+  }
+  return content;
 }
 
 

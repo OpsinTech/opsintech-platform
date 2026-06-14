@@ -1,6 +1,6 @@
 import { fetchAuthApi } from "@/core/api/auth-client";
 
-import type { Agent, CreateAgentRequest, UpdateAgentRequest } from "./types";
+import type { Agent, CreateAgentRequest, UpdateAgentRequest, Skill } from "./types";
 
 export async function listAgents(): Promise<Agent[]> {
   const res = await fetchAuthApi("/api/agents");
@@ -53,9 +53,14 @@ export async function deleteAgent(name: string): Promise<void> {
 
 export async function checkAgentName(
   name: string,
+  isShared?: boolean,
 ): Promise<{ available: boolean; name: string }> {
+  const queryParams = new URLSearchParams({ name });
+  if (isShared) {
+    queryParams.append("is_shared", "true");
+  }
   const res = await fetchAuthApi(
-    `/api/agents/check?name=${encodeURIComponent(name)}`,
+    `/api/agents/check?${queryParams.toString()}`,
   );
   if (!res.ok) {
     const err = (await res.json().catch(() => ({}))) as { detail?: string };
@@ -64,4 +69,12 @@ export async function checkAgentName(
     );
   }
   return res.json() as Promise<{ available: boolean; name: string }>;
+}
+
+
+export async function listSkills(): Promise<Skill[]> {
+  const res = await fetchAuthApi("/api/skills");
+  if (!res.ok) throw new Error(`Failed to load skills: ${res.statusText}`);
+  const data = (await res.json()) as { skills: Skill[] };
+  return data.skills;
 }

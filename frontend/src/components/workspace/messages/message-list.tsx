@@ -7,7 +7,7 @@ import {
   Conversation,
   ConversationContent,
 } from "@/components/ai-elements/conversation";
-import { useArtifactAccessToken } from "@/core/artifacts/hooks";
+import { getAuthToken } from "@/core/auth/auth-api";
 import { resolveArtifactURL } from "@/core/artifacts/utils";
 import { useI18n } from "@/core/i18n/hooks";
 import {
@@ -49,7 +49,7 @@ function parseTaskToolResult(result: string) {
   }
   if (result.startsWith("Task timed out")) {
     return {
-      status: "failed" as const,
+      status: "timed_out" as const,
       error: result,
     };
   }
@@ -123,7 +123,7 @@ function PresentFilesBlock({
   threadId: string;
   className?: string;
 }) {
-  const artifactToken = useArtifactAccessToken();
+  const artifactToken = getAuthToken() ?? undefined;
   const { t } = useI18n();
 
   return (
@@ -292,14 +292,33 @@ export function MessageList({
                 );
               }
             }
-            return results.length > 0 ? (
-              <div
-                key={"subtask-group-" + group.id}
-                className="relative z-1 flex flex-col gap-1 mb-3"
-              >
-                {results}
-              </div>
-            ) : null;
+            if (results.length > 0) {
+              return (
+                <div
+                  key={"subtask-group-" + group.id}
+                  className="relative z-1 flex flex-col gap-1 mb-3"
+                >
+                  {results}
+                </div>
+              );
+            }
+            // Fallback: show a minimal block for subagent messages with no reasoning
+            // so they don't silently disappear when the AI only issues task tool calls.
+            const message = group.messages[0];
+            if (message?.type === "ai") {
+              return (
+                <div
+                  key={"subtask-fallback-" + group.id}
+                  className="ml-9 mb-3 flex items-center gap-2 text-muted-foreground text-xs py-1"
+                >
+                  <SparklesIcon className="size-3.5 shrink-0 opacity-60" />
+                  <span>
+                    {t.subtasks?.in_progress ?? "Running subtasks..."}
+                  </span>
+                </div>
+              );
+            }
+            return null;
           }
             
           return (

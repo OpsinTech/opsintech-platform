@@ -16,8 +16,16 @@ from langgraph.runtime import Runtime
 
 from deerflow.config.summarization_config import get_summarization_config
 from deerflow.models.factory import create_chat_model
+from deerflow.config import get_app_config
 
 logger = logging.getLogger(__name__)
+
+# Default summarization trigger when model's max_input_tokens is not configured
+DEFAULT_SUMMARIZATION_TRIGGER_TOKENS = 12000
+# Fraction of model's max_input_tokens to use as trigger threshold
+SUMMARIZATION_TRIGGER_FRACTION = 0.7
+# Cap on auto-calculated trigger to avoid over-delaying summarization
+MAX_AUTO_TRIGGER_TOKENS = 120000
 
 
 class MarkedSummaryHumanMessage(HumanMessage):
@@ -65,14 +73,30 @@ class DeerflowSummarizationMiddleware(AgentMiddleware):
             self._middleware = None
             return
 
-        # Build trigger config (LangChain expects tuples, not dicts or Pydantic objects)
+        # Build trigger — auto-calculate from model's max_input_tokens if available
         trigger = config.trigger
         if trigger is None:
-            trigger = ("tokens", 4000)
+            trigger = ("tokens", DEFAULT_SUMMARIZATION_TRIGGER_TOKENS)
         elif isinstance(trigger, list):
             trigger = [t.to_tuple() for t in trigger]
         else:
             trigger = trigger.to_tuple()
+
+        # Override with auto-calculated threshold from model's context window
+        try:
+            model_cfg = get_app_config().get_model_config(conversation_model_name)
+            if model_cfg and model_cfg.max_input_tokens:
+                auto_tokens = min(
+                    int(model_cfg.max_input_tokens * SUMMARIZATION_TRIGGER_FRACTION),
+                    MAX_AUTO_TRIGGER_TOKENS,
+                )
+                trigger = ("tokens", auto_tokens)
+                logger.info(
+                    "Auto-calculated summarization trigger for model '%s': %d tokens (max_input=%d * %.0f%%)",
+                    conversation_model_name, auto_tokens, model_cfg.max_input_tokens, SUMMARIZATION_TRIGGER_FRACTION * 100,
+                )
+        except Exception:
+            pass  # Fall back to config.yaml value
 
         # Convert keep to tuple format
         keep_tuple = config.keep.to_tuple()

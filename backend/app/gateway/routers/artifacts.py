@@ -1,11 +1,13 @@
 import logging
 import mimetypes
+import threading
 import zipfile
+from collections import OrderedDict
 from pathlib import Path
 from urllib.parse import quote
 
 from fastapi import APIRouter, HTTPException, Request
-from fastapi.responses import FileResponse, HTMLResponse, PlainTextResponse, Response
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, PlainTextResponse, Response
 
 from app.gateway.authorization import require_tenant_context
 from app.gateway.path_utils import resolve_thread_virtual_path
@@ -95,6 +97,68 @@ async def get_artifact(thread_id: str, path: str, request: Request) -> Response:
         - Download file: `/api/threads/abc123/artifacts/mnt/user-data/outputs/data.csv?download=true`
     """
     require_tenant_context(request)
+
+    # Check for PPTX preview request
+    if path.lower().endswith(".pptx") and request.query_params.get("preview") == "true":
+        actual_path = resolve_thread_virtual_path(
+            request.state.user_id,
+            thread_id,
+            path,
+            tenant_id=getattr(request.state, "tenant_id", None),
+        )
+        if not actual_path.exists():
+            raise HTTPException(status_code=404, detail=f"PPTX file not found: {path}")
+
+        mtime = actual_path.stat().st_mtime
+        cache_key = (str(actual_path), mtime)
+
+        cached_result = _pptx_preview_cache.get(cache_key)
+        if cached_result is not None:
+            return JSONResponse(content=cached_result)
+
+        import sys
+        current_dir = Path(__file__).resolve()
+        platform_root = current_dir.parents[4]
+        scripts_dir = platform_root / "skills" / "public" / "ppt-master" / "scripts"
+
+        if str(scripts_dir) not in sys.path:
+            sys.path.insert(0, str(scripts_dir))
+
+        try:
+            from pptx_to_svg import convert_pptx_to_svg
+            from pptx_to_svg.converter import ConvertOptions
+        except ImportError as e:
+            logger.error(f"Failed to import pptx_to_svg: {e}")
+            raise HTTPException(status_code=500, detail="PPTX converter not available on the server.")
+
+        try:
+            options = ConvertOptions(
+                media_subdir="assets",
+                embed_images=True,
+                keep_hidden=False,
+                inheritance_mode="flat",
+            )
+            result = convert_pptx_to_svg(actual_path, output_dir=None, options=options)
+
+            slides = []
+            for slide in result.slides:
+                slides.append({
+                    "index": slide.index,
+                    "svg": slide.svg,
+                })
+
+            data = {
+                "canvas_width": result.canvas_px[0],
+                "canvas_height": result.canvas_px[1],
+                "slides": slides,
+            }
+
+            _pptx_preview_cache.set(cache_key, data)
+            return JSONResponse(content=data)
+        except Exception as e:
+            logger.exception(f"Failed to convert PPTX to SVG: {e}")
+            raise HTTPException(status_code=500, detail=f"Failed to preview PPTX: {str(e)}")
+
     # Check if this is a request for a file inside a .skill archive (e.g., xxx.skill/SKILL.md)
     if ".skill/" in path:
         # Split the path at ".skill/" to get the ZIP file path and internal path
@@ -168,3 +232,27 @@ async def get_artifact(thread_id: str, path: str, request: Request) -> Response:
         return PlainTextResponse(content=actual_path.read_text(encoding="utf-8"), media_type=mime_type)
 
     return Response(content=actual_path.read_bytes(), media_type=mime_type, headers={"Content-Disposition": f"inline; filename*=UTF-8''{encoded_filename}"})
+
+class LRUCache:
+    def __init__(self, maxsize: int = 20):
+        self.cache = OrderedDict()
+        self.maxsize = maxsize
+        self.lock = threading.Lock()
+
+    def get(self, key):
+        with self.lock:
+            if key not in self.cache:
+                return None
+            self.cache.move_to_end(key)
+            return self.cache[key]
+
+    def set(self, key, value):
+        with self.lock:
+            if key in self.cache:
+                self.cache.move_to_end(key)
+            self.cache[key] = value
+            if len(self.cache) > self.maxsize:
+                self.cache.popitem(last=False)
+
+_pptx_preview_cache = LRUCache(maxsize=20)
+

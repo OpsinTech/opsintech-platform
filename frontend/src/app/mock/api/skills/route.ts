@@ -42,9 +42,9 @@ export function GET() {
         enabled: true,
       },
       {
-        name: "ppt-generation",
+        name: "ppt-master",
         description:
-          "Use this skill when the user requests to generate, create, or make presentations (PPT/PPTX). Creates visually rich slides by generating images for each slide and composing them into a PowerPoint file.",
+          "AI-driven multi-format SVG content generation system. Converts source documents (PDF/DOCX/URL/Markdown) into high-quality SVG pages and exports to PPTX through multi-role collaboration.",
         license: null,
         category: "public",
         enabled: true,

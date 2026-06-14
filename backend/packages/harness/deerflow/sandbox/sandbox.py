@@ -14,11 +14,12 @@ class Sandbox(ABC):
         return self._id
 
     @abstractmethod
-    def execute_command(self, command: str) -> str:
+    def execute_command(self, command: str, env: dict[str, str] | None = None) -> str:
         """Execute bash command in sandbox.
 
         Args:
             command: The command to execute.
+            env: Optional environment variables to inject.
 
         Returns:
             The standard or error output of the command.
@@ -26,14 +27,16 @@ class Sandbox(ABC):
         pass
 
     @abstractmethod
-    def read_file(self, path: str) -> str:
+    def read_file(self, path: str, start_line: int | None = None, end_line: int | None = None) -> str:
         """Read the content of a file.
 
         Args:
             path: The absolute path of the file to read.
+            start_line: Optional starting line number (1-indexed, inclusive).
+            end_line: Optional ending line number (1-indexed, inclusive).
 
         Returns:
-            The content of the file.
+            The content of the file (or the specified line range).
         """
         pass
 

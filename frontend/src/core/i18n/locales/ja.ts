@@ -156,10 +156,10 @@ export const ja: Translations = {
       },
       {
         label: "PPT生成",
-        skillName: "ppt-generation",
-        prompt: "ppt-generationスキルを使用して、[トピック]に関するプロフェッショナルなプレゼンテーションを作成してください。",
+        skillName: "ppt-master",
+        prompt: "ppt-masterスキルを使用して、[トピック]に関するプロフェッショナルなプレゼンテーションを作成してください。",
         icon: PresentationIcon,
-        description: "プロフェッショナルなPPTを生成。ビジネス/アカデミック/ミニマル/Apple Keynote/クリエイティブスタイルに対応",
+        description: "プロフェッショナルなPPTを生成。SVGレイアウトとDrawingML編集可能な形状に基づく",
       },
       {
         label: "コンサルティング分析",
@@ -167,6 +167,13 @@ export const ja: Translations = {
         prompt: "consulting-analysisスキルを使用して、[トピック]に関する専門的なコンサルティング分析を実施し、レポートを生成してください。",
         icon: BriefcaseIcon,
         description: "マッキンゼー/BCGスタイルのプロフェッショナルなコンサルティングレポートを生成（市場分析、ブランド戦略、財務分析など）",
+      },
+      {
+        label: "PM要件定義",
+        skillName: "pm-analysis",
+        prompt: "pm-analysisスキルを使用して、新しい製品の要件を分析するか、競合の深いベンチマーク分析を実行してください。",
+        icon: CompassIcon,
+        description: "製品ディスカバリーと要件定義のエキスパートワークフロー、競合比較分析とPRD仕様定義に対応",
       },
     ],
     suggestionsCreate: [],
@@ -189,6 +196,7 @@ export const ja: Translations = {
     announcements: "お知らせ",
     auditGovernance: "監査とガバナンス",
     systemSettings: "システム設定",
+    incidents: "アラート",
   },
 
   // Agents
@@ -201,10 +209,12 @@ export const ja: Translations = {
     emptyDescription:
       "専門的なシステムプロンプトを備えた最初のカスタムエージェントを作成しましょう。",
     chat: "チャット",
+    editLabel: "編集",
     delete: "削除",
     deleteConfirm:
       "このエージェントを削除してもよろしいですか？この操作は取り消せません。",
     deleteSuccess: "エージェントを削除しました",
+    noDescription: "説明なし",
     newChat: "新しいチャット",
     createPageTitle: "エージェントを設計",
     createPageSubtitle:
@@ -223,6 +233,26 @@ export const ja: Translations = {
     agentCreated: "エージェントが作成されました！",
     startChatting: "チャットを開始",
     backToGallery: "ギャラリーに戻る",
+    edit: {
+      pageTitle: "エージェント編集：{name}",
+      systemPromptLabel: "システムプロンプト",
+      systemPromptPlaceholder: "エージェントの人格、役割、行動規範を定義...",
+      descriptionLabel: "説明",
+      descriptionPlaceholder: "このエージェントの機能の概要",
+      modelLabel: "モデル上書き",
+      modelDefault: "デフォルト（テナントデフォルトモデル）",
+      skillsLabel: "スキル（SOP）",
+      skillsHint: "このエージェントが使用できるスキルを選択。空 = 全テナントスキルが使用可能。",
+      skillsCount: (count: number) => `${count}件のスキルを選択中`,
+      tagsLabel: "タグ",
+      tagsPlaceholder: "入力してEnterでタグを追加...",
+      toolGroupsLabel: "ツールグループ",
+      toolGroupsPlaceholder: "入力してEnterでツールグループを追加...",
+      save: "保存",
+      saving: "保存中...",
+      saveSuccess: "エージェントを更新しました",
+      saveError: "エージェントの更新に失敗しました",
+    },
   },
 
   // Breadcrumb
@@ -301,6 +331,7 @@ export const ja: Translations = {
     in_progress: "サブタスク実行中",
     completed: "サブタスク完了",
     failed: "サブタスク失敗",
+    timed_out: "サブタスクタイムアウト",
   },
 
   // Token Usage
@@ -465,6 +496,7 @@ export const ja: Translations = {
         thinking: "思考",
         reasoningEffort: "推論",
         vision: "ビジョン",
+        text2image: "画像生成",
       },
       status: {
         enabled: "有効",
@@ -498,6 +530,7 @@ export const ja: Translations = {
         baseUrlPlaceholder: "任意",
         maxTokens: "最大トークン数",
         maxTokensPlaceholder: "任意",
+        sslVerification: "SSL検証",
         testConnection: "接続テスト",
         testing: "テスト中...",
         test: "接続テスト",
@@ -508,6 +541,7 @@ export const ja: Translations = {
         thinking: "思考",
         reasoningEffort: "推論レベル",
         vision: "ビジョン",
+        text2image: "画像生成功能",
         defaultEnabled: "デフォルトで有効",
         advancedConfig: "詳細設定",
         outputVersion: "出力バージョン",
@@ -1079,6 +1113,7 @@ export const ja: Translations = {
           supportsThinking: "思考モード対応",
           supportsReasoningEffort: "推論レベル対応",
           supportsVision: "ビジョン対応",
+          supportsText2Image: "画像生成対応",
           useResponsesApi: "Responses APIを使用",
           outputVersion: "出力バージョン（任意）",
           maxTokens: "最大トークン数（任意）",
@@ -1327,6 +1362,8 @@ export const ja: Translations = {
   // Thread error messages
   threadErrors: {
     rateLimited: "モデルリクエストがレート制限されました。後でもう一度お試しください。",
+    conversationSummarized: "会話が自動的に要約され、重要な内容が保持されました",
+    conversationSummarizedDesc: "長い会話履歴が要約に圧縮され、会話の連続性は維持されています",
     authFailed: "モデル認証に失敗しました。APIキーの設定を確認してください。",
     contentTooLong: "入力内容が長すぎてモデルのコンテキスト制限を超えています。入力を短くして再試行してください。",
     invalidResponse: "モデルが無効な応答を返しました。もう一度お試しください。",
@@ -1662,6 +1699,13 @@ export const ja: Translations = {
       edit: "編集",
       delete: "削除",
       deleting: "削除中...",
+      detailViewHint: "スキル名をクリックすると新しいタブで詳細を表示・編集できます。",
+      aiGenerate: "AIで指示を生成",
+      aiGeneratePlaceholder: "エージェントに実行させたい内容を記述...",
+      aiGenerating: "生成中...",
+      testChat: "テストチャット",
+      testChatPlaceholder: "シミュレートされたアラートシナリオを入力...",
+      testChatHint: "現在のスキル指示で診断テスト",
     },
     settings: {
       title: "テナント設定",

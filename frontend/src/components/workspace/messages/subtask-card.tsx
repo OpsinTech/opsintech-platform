@@ -1,11 +1,11 @@
 import {
   CheckCircleIcon,
   ChevronUp,
-  ClipboardListIcon,
   Loader2Icon,
+  TimerOffIcon,
   XCircleIcon,
 } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Streamdown } from "streamdown";
 
 import {
@@ -15,7 +15,6 @@ import {
 } from "@/components/ai-elements/chain-of-thought";
 import { Shimmer } from "@/components/ai-elements/shimmer";
 import { Button } from "@/components/ui/button";
-import { ShineBorder } from "@/components/ui/shine-border";
 import { useI18n } from "@/core/i18n/hooks";
 import { useRehypeSplitWordsIntoSpans } from "@/core/rehype";
 import { streamdownPluginsWithWordAnimation } from "@/core/streamdown";
@@ -28,6 +27,22 @@ import { FlipDisplay } from "../flip-display";
 
 import { MarkdownContent } from "./markdown-content";
 
+function formatDuration(seconds: number): string {
+  if (seconds < 60) {
+    return `${seconds}s`;
+  }
+  const m = Math.floor(seconds / 60);
+  const s = seconds % 60;
+  return s > 0 ? `${m}m ${s}s` : `${m}m`;
+}
+
+function elapsedBetween(startIso: string, endIso?: string): string {
+  const start = new Date(startIso).getTime();
+  const end = endIso ? new Date(endIso).getTime() : Date.now();
+  const diff = Math.max(0, Math.floor((end - start) / 1000));
+  return formatDuration(diff);
+}
+
 export function SubtaskCard({
   className,
   taskId,
@@ -39,8 +54,16 @@ export function SubtaskCard({
 }) {
   const { t } = useI18n();
   const [collapsed, setCollapsed] = useState(true);
+  const [now, setNow] = useState(Date.now());
   const rehypePlugins = useRehypeSplitWordsIntoSpans(isLoading);
   const task = useSubtask(taskId);
+
+  // Live timer for running tasks
+  useEffect(() => {
+    if (!task || task.status !== "in_progress") return;
+    const id = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, [task?.status]);
 
   const icon = useMemo(() => {
     if (!task) {
@@ -51,10 +74,24 @@ export function SubtaskCard({
       return <CheckCircleIcon className="size-3" />;
     } else if (task.status === "failed") {
       return <XCircleIcon className="size-3 text-red-500" />;
+    } else if (task.status === "timed_out") {
+      return <TimerOffIcon className="size-3 text-amber-500" />;
     } else if (task.status === "in_progress") {
       return <Loader2Icon className="size-3 animate-spin" />;
     }
   }, [task?.status]);
+
+  const durationLabel = useMemo(() => {
+    if (!task) return null;
+
+    if (task.status === "in_progress" && task.startedAt) {
+      return elapsedBetween(task.startedAt, undefined);
+    }
+    if (task.startedAt) {
+      return elapsedBetween(task.startedAt, task.completedAt);
+    }
+    return null;
+  }, [task?.startedAt, task?.completedAt, task?.status, now]);
 
   if (!task) {
     return null;
@@ -86,11 +123,23 @@ export function SubtaskCard({
             </div>
             
             <div className="flex items-center gap-2 shrink-0">
+              {durationLabel && (
+                <span
+                  className={cn(
+                    "text-muted-foreground text-[10px] font-mono",
+                    task.status === "failed" ? "text-red-500/70" : "",
+                    task.status === "timed_out" ? "text-amber-500/70" : "",
+                  )}
+                >
+                  {durationLabel}
+                </span>
+              )}
               {collapsed && (
                 <div
                   className={cn(
                     "text-muted-foreground flex items-center gap-1.5 text-xs font-normal pl-2",
                     task.status === "failed" ? "text-red-500 opacity-80" : "",
+                    task.status === "timed_out" ? "text-amber-500 opacity-80" : "",
                   )}
                 >
                   <FlipDisplay
@@ -157,6 +206,12 @@ export function SubtaskCard({
                 }
               ></ChainOfThoughtStep>
             </>
+          )}
+          {task.status === "timed_out" && (
+            <ChainOfThoughtStep
+              label={<div className="text-amber-500">{task.error || t.subtasks.timed_out}</div>}
+              icon={<TimerOffIcon className="size-4 text-amber-500" />}
+            ></ChainOfThoughtStep>
           )}
           {task.status === "failed" && (
             <ChainOfThoughtStep

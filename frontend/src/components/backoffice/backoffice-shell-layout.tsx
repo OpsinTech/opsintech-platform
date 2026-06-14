@@ -27,13 +27,13 @@ import {
   DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { logout } from "@/core/auth/auth-api";
 import { useSession } from "@/core/auth/hooks";
 import { enUS, zhCN, ja, ko, type Locale } from "@/core/i18n";
 import { useI18n } from "@/core/i18n/hooks";
 import { isPlatformAdminRole } from "@/core/permissions/roles";
 import { clearTenantId } from "@/core/tenants";
 import { cn } from "@/lib/utils";
-import { logout } from "@/core/auth/auth-api";
 
 import { ChangePasswordDialog } from "./change-password-dialog";
 
@@ -59,7 +59,7 @@ export function BackofficeShellLayout({
   moduleDescription,
   moduleIcon: ModuleIcon,
   navItems,
-  bottomItems = [],
+  bottomItems: _bottomItems = [],
   sidebarExtra,
   topSlot,
   children,
@@ -103,8 +103,8 @@ export function BackofficeShellLayout({
     }
   };
 
-  const userName = session?.user?.name || "Administrator";
-  const userEmail = session?.user?.email || "";
+  const userName = session?.user?.name ?? "Administrator";
+  const userEmail = session?.user?.email ?? "";
 
   return (
     <div className="flex h-screen w-full overflow-hidden bg-background text-foreground">
@@ -272,7 +272,7 @@ export function BackofficeShellLayout({
 
       <main className="min-w-0 flex-1 overflow-y-auto">
         {topSlot ? <div className="border-b bg-background">{topSlot}</div> : null}
-        <div className="mx-auto w-full max-w-7xl px-6 py-6">{children}</div>
+        <div className="w-full px-6 py-6">{children}</div>
       </main>
 
       <ChangePasswordDialog

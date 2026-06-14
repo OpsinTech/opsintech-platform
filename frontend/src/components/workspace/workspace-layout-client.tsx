@@ -5,6 +5,7 @@ import { useCallback, useEffect, useLayoutEffect, useState } from "react";
 import { toast, Toaster } from "sonner";
 
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
+import { ChatTabsProvider } from "@/components/workspace/chats/chat-tabs-context";
 import { CommandPalette } from "@/components/workspace/command-palette";
 import { WorkspaceSidebar } from "@/components/workspace/workspace-sidebar";
 import { getLocalSettings, useLocalSettings } from "@/core/settings";
@@ -115,9 +116,9 @@ export function WorkspaceLayoutClient({
         onOpenChange={handleOpenChange}
       >
         <WorkspaceSidebar />
-        <SidebarInset className="min-w-0">
-          {children}
-        </SidebarInset>
+          <SidebarInset className="min-w-0">
+            <ChatTabsProvider>{children}</ChatTabsProvider>
+          </SidebarInset>
       </SidebarProvider>
       <CommandPalette />
       <Toaster position="top-center" />

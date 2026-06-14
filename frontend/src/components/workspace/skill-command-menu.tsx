@@ -50,17 +50,21 @@ export function SkillCommandMenu({
   }, [onOpenChange, onSearchChange]);
 
   const filteredSkills = useMemo(() => {
+    const footerSkillNames = new Set(t.inputBox.suggestions?.map((s) => s.skillName) ?? []);
+    const availableSkills = skills.filter(
+      (s) => s.enabled !== false && !footerSkillNames.has(s.name)
+    );
+
     if (!search.trim()) {
-      return skills.filter((s) => s.enabled !== false);
+      return availableSkills;
     }
     const lowerSearch = search.toLowerCase();
-    return skills.filter(
+    return availableSkills.filter(
       (s) =>
-        s.enabled !== false &&
-        (s.name.toLowerCase().includes(lowerSearch) ||
-          s.description.toLowerCase().includes(lowerSearch)),
+        s.name.toLowerCase().includes(lowerSearch) ||
+        (s.description && s.description.toLowerCase().includes(lowerSearch)),
     );
-  }, [skills, search]);
+  }, [skills, search, t.inputBox.suggestions]);
 
   const groupedSkills = useMemo(() => {
     const groups: Record<string, AvailableSkillResponse[]> = {};
@@ -171,26 +175,33 @@ export function SkillCommandMenu({
                 </span>
               }
             >
-              {categorySkills.map((skill) => (
-                <CommandItem
-                  key={skill.name}
-                  value={skill.name}
-                  onSelect={() => handleSelect(skill)}
-                  className="cursor-pointer"
-                >
-                  <div className="flex flex-col gap-1 pr-2">
-                    <div className="flex items-center gap-2">
-                      <SparklesIcon className="size-3.5 shrink-0 text-primary" />
-                      <span className="font-medium text-sm">{skill.name}</span>
+              {categorySkills.map((skill) => {
+                const suggestion = t.inputBox.suggestions?.find(
+                  (s) => s.skillName === skill.name
+                );
+                const displayName = suggestion?.label ?? skill.name;
+                const displayDesc = suggestion?.description ?? skill.description;
+                return (
+                  <CommandItem
+                    key={skill.name}
+                    value={skill.name}
+                    onSelect={() => handleSelect(skill)}
+                    className="cursor-pointer"
+                  >
+                    <div className="flex flex-col gap-1 pr-2">
+                      <div className="flex items-center gap-2">
+                        <SparklesIcon className="size-3.5 shrink-0 text-primary" />
+                        <span className="font-medium text-sm">{displayName}</span>
+                      </div>
+                      {displayDesc && (
+                        <p className="text-xs text-muted-foreground line-clamp-2 pl-5">
+                          {displayDesc}
+                        </p>
+                      )}
                     </div>
-                    {skill.description && (
-                      <p className="text-xs text-muted-foreground line-clamp-2 pl-5">
-                        {skill.description}
-                      </p>
-                    )}
-                  </div>
-                </CommandItem>
-              ))}
+                  </CommandItem>
+                );
+              })}
             </CommandGroup>
           ))}
         </CommandList>

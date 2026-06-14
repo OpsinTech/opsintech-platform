@@ -156,10 +156,10 @@ export const enUS: Translations = {
       },
       {
         label: "PPT Generation",
-        skillName: "ppt-generation",
-        prompt: "Use the ppt-generation skill to create a professional presentation about [topic] for me.",
+        skillName: "ppt-master",
+        prompt: "Use the ppt-master skill to create a professional presentation about [topic] for me.",
         icon: PresentationIcon,
-        description: "Generate professional PPTs, supporting Business/Academic/Minimal/Apple Keynote/Creative styles",
+        description: "Generate professional PPTs based on SVG layouts and DrawingML editable shapes",
       },
       {
         label: "Consulting Analysis",
@@ -167,6 +167,13 @@ export const enUS: Translations = {
         prompt: "Use the consulting-analysis skill to conduct a professional consulting analysis on [topic] and generate a report.",
         icon: BriefcaseIcon,
         description: "Generate McKinsey/BCG-style professional consulting reports (market analysis, brand strategy, financial analysis, etc.)",
+      },
+      {
+        label: "PM Requirement",
+        skillName: "pm-analysis",
+        prompt: "Use the pm-analysis skill to analyze a new product requirement or perform a deep competitive benchmarking analysis.",
+        icon: CompassIcon,
+        description: "Product discovery and requirements engineering expert workflow, supporting deep competitive study and structured PRD mapping",
       },
     ],
     suggestionsCreate: [],
@@ -189,6 +196,8 @@ export const enUS: Translations = {
     announcements: "Announcements",
     auditGovernance: "Audit & Governance",
     systemSettings: "System Settings",
+    incidents: "Alerts",
+    skillsPlaza: "Skills Plaza",
   },
 
   // Agents
@@ -201,10 +210,12 @@ export const enUS: Translations = {
     emptyDescription:
       "Create your first custom agent with a specialized system prompt.",
     chat: "Chat",
+    editLabel: "Edit",
     delete: "Delete",
     deleteConfirm:
       "Are you sure you want to delete this agent? This action cannot be undone.",
     deleteSuccess: "Agent deleted",
+    noDescription: "No description",
     newChat: "New chat",
     createPageTitle: "Design your Agent",
     createPageSubtitle:
@@ -223,6 +234,28 @@ export const enUS: Translations = {
     agentCreated: "Agent created!",
     startChatting: "Start chatting",
     backToGallery: "Back to Gallery",
+    edit: {
+      pageTitle: "Edit Agent: {name}",
+      systemPromptLabel: "System Prompt",
+      systemPromptPlaceholder:
+        "Define the agent's personality, role, and behavioral guardrails...",
+      descriptionLabel: "Description",
+      descriptionPlaceholder: "Brief description of what this agent does",
+      modelLabel: "Model Override",
+      modelDefault: "Default (tenant default model)",
+      skillsLabel: "Skills (SOPs)",
+      skillsHint:
+        "Select which skills this agent can use. Empty = all tenant skills available.",
+      skillsCount: (count: number) => `${count} skill${count !== 1 ? "s" : ""} selected`,
+      tagsLabel: "Tags",
+      tagsPlaceholder: "Type and press Enter to add a tag...",
+      toolGroupsLabel: "Tool Groups",
+      toolGroupsPlaceholder: "Type and press Enter to add a tool group...",
+      save: "Save",
+      saving: "Saving...",
+      saveSuccess: "Agent updated",
+      saveError: "Failed to update agent",
+    },
   },
 
   // Breadcrumb
@@ -301,6 +334,7 @@ export const enUS: Translations = {
     in_progress: "Running subtask",
     completed: "Subtask completed",
     failed: "Subtask failed",
+    timed_out: "Subtask timed out",
   },
 
   // Token Usage
@@ -465,6 +499,7 @@ export const enUS: Translations = {
         thinking: "Thinking",
         reasoningEffort: "Reasoning",
         vision: "Vision",
+        text2image: "Text-to-Image",
       },
       status: {
         enabled: "Enabled",
@@ -498,6 +533,7 @@ export const enUS: Translations = {
         baseUrlPlaceholder: "Optional",
         maxTokens: "Max Tokens",
         maxTokensPlaceholder: "Optional",
+        sslVerification: "SSL Verification",
         testConnection: "Test Connection",
         testing: "Testing...",
         test: "Test Connection",
@@ -508,6 +544,7 @@ export const enUS: Translations = {
         thinking: "Thinking",
         reasoningEffort: "Reasoning Effort",
         vision: "Vision",
+        text2image: "Text-to-Image",
         defaultEnabled: "Enabled by default",
         advancedConfig: "Advanced Config",
         outputVersion: "Output Version",
@@ -1079,6 +1116,7 @@ export const enUS: Translations = {
           supportsThinking: "Supports Thinking Mode",
           supportsReasoningEffort: "Supports Reasoning Effort",
           supportsVision: "Supports Vision",
+          supportsText2Image: "Supports Text-to-Image",
           useResponsesApi: "Use Responses API",
           outputVersion: "Output version (optional)",
           maxTokens: "Max tokens (optional)",
@@ -1327,6 +1365,8 @@ export const enUS: Translations = {
   // Thread error messages
   threadErrors: {
     rateLimited: "Model request rate limited. Please try again later.",
+    conversationSummarized: "Conversation has been summarized, key content preserved",
+    conversationSummarizedDesc: "Long conversation history has been compressed into a summary without losing continuity",
     authFailed: "Model authentication failed. Please check your API key configuration.",
     contentTooLong: "Input content is too long and exceeds the model context limit. Please shorten your input and try again.",
     invalidResponse: "The model returned an invalid response. Please try again.",
@@ -1662,6 +1702,13 @@ export const enUS: Translations = {
       edit: "Edit",
       delete: "Delete",
       deleting: "Deleting...",
+      detailViewHint: "Click skill name to view and edit details in a new tab.",
+      aiGenerate: "AI Generate Instructions",
+      aiGeneratePlaceholder: "Describe what you want the agent to do...",
+      aiGenerating: "Generating...",
+      testChat: "Test Chat",
+      testChatPlaceholder: "Enter a simulated alert scenario...",
+      testChatHint: "Test diagnosis with current skill instructions",
     },
     settings: {
       title: "Tenant Settings",

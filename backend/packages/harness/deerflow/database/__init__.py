@@ -1,3 +1,3 @@
-from deerflow.database.models import TenantMcpServer, TenantModelConfig, TenantSkill, UserConfig
+from deerflow.database.models import SubagentRun, TenantMcpServer, TenantModelConfig, TenantSkill, UserConfig
 
-__all__ = ["UserConfig", "TenantModelConfig", "TenantMcpServer", "TenantSkill"]
+__all__ = ["UserConfig", "TenantModelConfig", "TenantMcpServer", "TenantSkill", "SubagentRun"]

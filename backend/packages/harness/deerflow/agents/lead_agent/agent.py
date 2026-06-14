@@ -175,6 +175,9 @@ def make_lead_agent(config):
                 state_schema=ThreadState,
             )
 
+        agent_skills = set(agent_config.skills) if (agent_config and agent_config.skills is not None) else None
+        effective_skills = {skill_name} if skill_name else agent_skills
+
         return create_agent(
             model=create_chat_model(name=model_name, thinking_enabled=thinking_enabled, reasoning_effort=reasoning_effort),
             tools=get_available_tools(model_name=model_name, groups=agent_config.tool_groups if agent_config else None, subagent_enabled=subagent_enabled),
@@ -183,7 +186,7 @@ def make_lead_agent(config):
                 subagent_enabled=subagent_enabled,
                 max_concurrent_subagents=max_concurrent_subagents,
                 agent_name=agent_name,
-                available_skills={skill_name} if skill_name else None,
+                available_skills=effective_skills,
                 user_id=user_id,
             ),
             state_schema=ThreadState,

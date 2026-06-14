@@ -1,6 +1,6 @@
 "use client";
 
-import { PlusIcon } from "lucide-react";
+import { PlusIcon, SearchIcon } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import type { FormEvent } from "react";
 
@@ -297,12 +297,13 @@ export default function AdminAnnouncementsPage() {
           <div className="flex flex-col sm:flex-row gap-3 flex-wrap">
             {/* 搜索框 */}
             <div className="relative">
+              <SearchIcon className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
               <input
                 type="text"
                 placeholder={t.admin.announcements.filter.searchPlaceholder}
                 value={searchKeyword}
                 onChange={(e) => setSearchKeyword(e.target.value)}
-                className="h-9 w-full sm:w-64 rounded-md border border-zinc-200 bg-white px-3 pr-9 text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500 dark:border-zinc-800 dark:bg-zinc-900"
+                className="h-9 w-full sm:w-64 rounded-md border border-zinc-200 bg-white pl-9 pr-9 text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500 dark:border-zinc-800 dark:bg-zinc-900"
               />
               {searchKeyword && (
                 <button

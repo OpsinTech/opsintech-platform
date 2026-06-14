@@ -1,6 +1,6 @@
 "use client";
 
-import { BuildingIcon, PlusIcon, Trash2Icon, Edit2Icon } from "lucide-react";
+import { BuildingIcon, PlusIcon, Trash2Icon, Edit2Icon, SearchIcon } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 
 import { Button } from "@/components/ui/button";
@@ -110,7 +110,7 @@ export default function AdminTenantsPage() {
   });
 
   return (
-    <div className="flex-1 overflow-auto p-8 space-y-8">
+    <div className="flex-1 space-y-6">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight inline-flex items-center gap-2">
@@ -125,13 +125,14 @@ export default function AdminTenantsPage() {
         </Button>
       </div>
 
-      <div className="w-full md:max-w-sm">
+      <div className="relative w-full md:max-w-sm">
+        <SearchIcon className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
         <input
           type="text"
           placeholder={t.admin.tenants.searchPlaceholder}
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          className="h-9 w-full rounded-md border border-zinc-200 bg-white px-3 text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500 dark:border-zinc-800 dark:bg-zinc-900"
+          className="h-9 w-full rounded-md border border-zinc-200 bg-white pl-9 pr-3 text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500 dark:border-zinc-800 dark:bg-zinc-900"
         />
       </div>
 

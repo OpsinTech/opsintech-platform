@@ -32,7 +32,10 @@ class LocalSandbox(Sandbox):
             return shell_from_path
         raise RuntimeError("No suitable shell executable found. Tried /bin/zsh, /bin/bash, /bin/sh, and `sh` on PATH.")
 
-    def execute_command(self, command: str) -> str:
+    def execute_command(self, command: str, env: dict[str, str] | None = None) -> str:
+        subprocess_env = os.environ.copy()
+        if env:
+            subprocess_env.update(env)
         result = subprocess.run(
             command,
             executable=self._get_shell(),
@@ -40,6 +43,7 @@ class LocalSandbox(Sandbox):
             capture_output=True,
             text=True,
             timeout=600,
+            env=subprocess_env,
         )
         output = result.stdout
         if result.stderr:
@@ -52,9 +56,16 @@ class LocalSandbox(Sandbox):
     def list_dir(self, path: str, max_depth=2) -> list[str]:
         return list_dir(path, max_depth)
 
-    def read_file(self, path: str) -> str:
+    def read_file(self, path: str, start_line: int | None = None, end_line: int | None = None) -> str:
+        if start_line is None and end_line is None:
+            with open(path, encoding="utf-8") as f:
+                return f.read()
+        import itertools
+
         with open(path, encoding="utf-8") as f:
-            return f.read()
+            first = (start_line or 1) - 1
+            last = end_line
+            return "".join(itertools.islice(f, first, last))
 
     def write_file(self, path: str, content: str, append: bool = False) -> None:
         dir_path = os.path.dirname(path)

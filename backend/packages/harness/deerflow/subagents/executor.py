@@ -46,6 +46,13 @@ class SubagentResult:
         started_at: When execution started.
         completed_at: When execution completed.
         ai_messages: List of complete AI messages (as dicts) generated during execution.
+        timeout_seconds: The configured timeout for this subagent.
+        max_turns: Maximum number of agent turns.
+        description: Short task description for display.
+        prompt: The full task prompt.
+        thread_id: The parent thread / conversation ID.
+        tenant_id: Tenant ID for DB persistence.
+        user_id: User ID for DB persistence.
     """
 
     task_id: str
@@ -56,6 +63,13 @@ class SubagentResult:
     started_at: datetime | None = None
     completed_at: datetime | None = None
     ai_messages: list[dict[str, Any]] | None = None
+    timeout_seconds: int = 900
+    max_turns: int = 80
+    description: str = ""
+    prompt: str = ""
+    thread_id: str = ""
+    tenant_id: str | None = None
+    user_id: str | None = None
 
     def __post_init__(self):
         """Initialize mutable defaults."""
@@ -233,24 +247,17 @@ class SubagentExecutor:
             agent = self._create_agent()
             state = self._build_initial_state(task)
 
-            # Build config with thread_id for sandbox access and recursion limit
+            # Build config with recursion limit
             run_config: RunnableConfig = {
                 "recursion_limit": self.config.max_turns,
             }
-            configurable: dict[str, str] = {}
             context: dict[str, str] = {}
             if self.thread_id:
-                configurable["thread_id"] = self.thread_id
                 context["thread_id"] = self.thread_id
             if self.user_id:
-                configurable["user_id"] = self.user_id
                 context["user_id"] = self.user_id
             if self.tenant_id:
-                configurable["tenant_id"] = self.tenant_id
                 context["tenant_id"] = self.tenant_id
-
-            if configurable:
-                run_config["configurable"] = configurable
 
             logger.info(f"[trace={self.trace_id}] Subagent {self.config.name} starting async execution with max_turns={self.config.max_turns}")
 
@@ -404,12 +411,13 @@ class SubagentExecutor:
             result.completed_at = datetime.now()
             return result
 
-    def execute_async(self, task: str, task_id: str | None = None) -> str:
+    def execute_async(self, task: str, task_id: str | None = None, **extra: Any) -> str:
         """Start a task execution in the background.
 
         Args:
             task: The task description for the subagent.
             task_id: Optional task ID to use. If not provided, a random UUID will be generated.
+            **extra: Extra fields to store on SubagentResult (description, prompt, etc.).
 
         Returns:
             Task ID that can be used to check status later.
@@ -423,6 +431,13 @@ class SubagentExecutor:
             task_id=task_id,
             trace_id=self.trace_id,
             status=SubagentStatus.PENDING,
+            timeout_seconds=self.config.timeout_seconds,
+            max_turns=self.config.max_turns or 80,
+            description=extra.get("description", ""),
+            prompt=extra.get("prompt", ""),
+            thread_id=self.thread_id or "",
+            tenant_id=self.tenant_id,
+            user_id=self.user_id,
         )
 
         logger.info(f"[trace={self.trace_id}] Subagent {self.config.name} starting async execution, task_id={task_id}, timeout={self.config.timeout_seconds}s")
@@ -437,6 +452,24 @@ class SubagentExecutor:
                 _background_tasks[task_id].started_at = datetime.now()
                 result_holder = _background_tasks[task_id]
 
+            # Lazily import to avoid circular dependency at module level
+            from deerflow.database.subagent_store import persist_subagent_run
+
+            persist_subagent_run(
+                task_id=task_id,
+                thread_id=result_holder.thread_id,
+                tenant_id=result_holder.tenant_id,
+                user_id=result_holder.user_id,
+                subagent_type=self.config.name,
+                description=result_holder.description,
+                prompt=result_holder.prompt,
+                status="running",
+                timeout_seconds=result_holder.timeout_seconds,
+                max_turns=result_holder.max_turns,
+                trace_id=result_holder.trace_id,
+                started_at=result_holder.started_at,
+            )
+
             try:
                 # Submit execution to execution pool with timeout
                 # Pass result_holder so execute() can update it in real-time
@@ -450,12 +483,45 @@ class SubagentExecutor:
                         _background_tasks[task_id].error = exec_result.error
                         _background_tasks[task_id].completed_at = datetime.now()
                         _background_tasks[task_id].ai_messages = exec_result.ai_messages
+
+                    persist_subagent_run(
+                        task_id=task_id,
+                        thread_id=result_holder.thread_id,
+                        tenant_id=result_holder.tenant_id,
+                        user_id=result_holder.user_id,
+                        subagent_type=self.config.name,
+                        description=result_holder.description,
+                        status="completed",
+                        result=exec_result.result,
+                        timeout_seconds=result_holder.timeout_seconds,
+                        max_turns=result_holder.max_turns,
+                        trace_id=result_holder.trace_id,
+                        started_at=result_holder.started_at,
+                        completed_at=datetime.now(),
+                    )
                 except FuturesTimeoutError:
                     logger.error(f"[trace={self.trace_id}] Subagent {self.config.name} execution timed out after {self.config.timeout_seconds}s")
                     with _background_tasks_lock:
                         _background_tasks[task_id].status = SubagentStatus.TIMED_OUT
                         _background_tasks[task_id].error = f"Execution timed out after {self.config.timeout_seconds} seconds"
                         _background_tasks[task_id].completed_at = datetime.now()
+
+                    persist_subagent_run(
+                        task_id=task_id,
+                        thread_id=result_holder.thread_id,
+                        tenant_id=result_holder.tenant_id,
+                        user_id=result_holder.user_id,
+                        subagent_type=self.config.name,
+                        description=result_holder.description,
+                        status="timed_out",
+                        error=f"Execution timed out after {self.config.timeout_seconds} seconds",
+                        timeout_seconds=result_holder.timeout_seconds,
+                        max_turns=result_holder.max_turns,
+                        trace_id=result_holder.trace_id,
+                        started_at=result_holder.started_at,
+                        completed_at=datetime.now(),
+                    )
+
                     # Cancel the future (best effort - may not stop the actual execution)
                     execution_future.cancel()
             except Exception as e:
@@ -464,6 +530,22 @@ class SubagentExecutor:
                     _background_tasks[task_id].status = SubagentStatus.FAILED
                     _background_tasks[task_id].error = str(e)
                     _background_tasks[task_id].completed_at = datetime.now()
+
+                persist_subagent_run(
+                    task_id=task_id,
+                    thread_id=result_holder.thread_id,
+                    tenant_id=result_holder.tenant_id,
+                    user_id=result_holder.user_id,
+                    subagent_type=self.config.name,
+                    description=result_holder.description,
+                    status="failed",
+                    error=str(e),
+                    timeout_seconds=result_holder.timeout_seconds,
+                    max_turns=result_holder.max_turns,
+                    trace_id=result_holder.trace_id,
+                    started_at=result_holder.started_at,
+                    completed_at=datetime.now(),
+                )
 
         _scheduler_pool.submit(run_task)
         return task_id

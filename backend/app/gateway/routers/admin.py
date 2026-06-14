@@ -1065,10 +1065,14 @@ class AdminGlobalModelResponse(BaseModel):
     supports_thinking: bool = False
     supports_reasoning_effort: bool = False
     supports_vision: bool = False
+    supports_text2image: bool = False
     use_responses_api: bool | None = None
     output_version: str | None = None
     max_tokens: int | None = None
+    max_input_tokens: int | None = None
     enabled: bool = True
+    verify_ssl: bool = False
+    model_type: str | None = None
 
 
 class AdminGlobalModelsListResponse(BaseModel):
@@ -1094,7 +1098,11 @@ class AdminGlobalModelCreateRequest(BaseModel):
     supports_thinking: bool = False
     supports_reasoning_effort: bool = False
     supports_vision: bool = False
+    supports_text2image: bool = False
     enabled: bool = True
+    verify_ssl: bool = False
+    max_input_tokens: int | None = None
+    model_type: str | None = None
 
 
 class AdminGlobalModelUpdateRequest(BaseModel):
@@ -1110,7 +1118,11 @@ class AdminGlobalModelUpdateRequest(BaseModel):
     supports_thinking: bool | None = None
     supports_reasoning_effort: bool | None = None
     supports_vision: bool | None = None
+    supports_text2image: bool | None = None
     enabled: bool | None = None
+    verify_ssl: bool | None = None
+    max_input_tokens: int | None = None
+    model_type: str | None = None
 
 
 class AdminTenantAssignedModelsResponse(BaseModel):
@@ -1156,10 +1168,14 @@ async def list_global_models_for_platform_admin():
                 supports_thinking=bool(getattr(row, "supports_thinking", False)),
                 supports_reasoning_effort=bool(getattr(row, "supports_reasoning_effort", False)),
                 supports_vision=bool(getattr(row, "supports_vision", False)),
+                supports_text2image=bool(getattr(row, "supports_text2image", False)),
                 use_responses_api=settings.get("use_responses_api"),
                 output_version=settings.get("output_version"),
                 max_tokens=settings.get("max_tokens"),
                 enabled=bool(settings.get("enabled", True)),
+                verify_ssl=bool(settings.get("verify_ssl", False)),
+                max_input_tokens=getattr(row, "max_input_tokens", None),
+                model_type=getattr(row, "model_type", None),
             )
         )
     return AdminGlobalModelsListResponse(models=models)
@@ -1193,10 +1209,14 @@ async def create_global_model_for_platform_admin(req: Request, body: AdminGlobal
         supports_thinking=bool(getattr(row, "supports_thinking", False)),
         supports_reasoning_effort=bool(getattr(row, "supports_reasoning_effort", False)),
         supports_vision=bool(getattr(row, "supports_vision", False)),
+        supports_text2image=bool(getattr(row, "supports_text2image", False)),
         use_responses_api=settings.get("use_responses_api"),
         output_version=settings.get("output_version"),
         max_tokens=settings.get("max_tokens"),
         enabled=bool(settings.get("enabled", True)),
+        verify_ssl=bool(settings.get("verify_ssl", True)),
+        max_input_tokens=getattr(row, "max_input_tokens", None),
+        model_type=getattr(row, "model_type", None),
     )
 
 
@@ -1233,10 +1253,14 @@ async def update_global_model_for_platform_admin(req: Request, model_name: str, 
         supports_thinking=bool(getattr(row, "supports_thinking", False)),
         supports_reasoning_effort=bool(getattr(row, "supports_reasoning_effort", False)),
         supports_vision=bool(getattr(row, "supports_vision", False)),
+        supports_text2image=bool(getattr(row, "supports_text2image", False)),
         use_responses_api=settings.get("use_responses_api"),
         output_version=settings.get("output_version"),
         max_tokens=settings.get("max_tokens"),
         enabled=bool(settings.get("enabled", True)),
+        verify_ssl=bool(settings.get("verify_ssl", True)),
+        max_input_tokens=getattr(row, "max_input_tokens", None),
+        model_type=getattr(row, "model_type", None),
     )
 
 
@@ -1355,6 +1379,7 @@ class AdminTestModelConnectionRequest(BaseModel):
     base_url: str | None = Field(default=None, description="Optional provider base URL")
     api_key: str | None = Field(default=None, description="Optional provider API key")
     max_tokens: int = Field(default=32, description="Max tokens for the test call")
+    verify_ssl: bool = Field(default=False, description="Verify SSL certificate when connecting")
 
 
 class AdminTestModelConnectionResponse(BaseModel):
@@ -1381,7 +1406,6 @@ async def test_model_connection_for_platform_admin(body: AdminTestModelConnectio
 
     kwargs: dict = {
         "model": body.model,
-        "max_tokens": body.max_tokens,
         "temperature": 0,
         "request_timeout": 15,
     }
@@ -1389,6 +1413,17 @@ async def test_model_connection_for_platform_admin(body: AdminTestModelConnectio
         kwargs["base_url"] = body.base_url.rstrip("/")
     if body.api_key:
         kwargs["api_key"] = body.api_key
+    if not body.verify_ssl:
+        import httpx
+        kwargs["http_client"] = httpx.Client(verify=False, trust_env=False)
+        kwargs["http_async_client"] = httpx.AsyncClient(verify=False, trust_env=False)
+    if "api_key" not in kwargs:
+        kwargs["api_key"] = "not-needed"
+    # Map generic api_key to provider-specific parameter names
+    if body.use.startswith("langchain_anthropic"):
+        kwargs["anthropic_api_key"] = kwargs.pop("api_key")
+    elif body.use.startswith("langchain_google_genai"):
+        kwargs["google_api_key"] = kwargs.pop("api_key")
 
     try:
         instance = model_class(**kwargs)

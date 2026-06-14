@@ -1,6 +1,6 @@
 "use client";
 
-import { UserCheckIcon, UserXIcon, ShieldIcon, CheckCircle2Icon, XCircleIcon, PlusIcon, KeyRoundIcon, Trash2Icon } from "lucide-react";
+import { UserCheckIcon, UserXIcon, ShieldIcon, CheckCircle2Icon, XCircleIcon, PlusIcon, KeyRoundIcon, Trash2Icon, SearchIcon } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 
 import { Button } from "@/components/ui/button";
@@ -90,20 +90,23 @@ export default function AdminUsersPage() {
   };
 
   return (
-    <div className="flex-1 p-8 overflow-auto">
+    <div className="flex-1 space-y-6">
       <div className="mb-8 flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-semibold mb-2">{t.admin.users.title}</h1>
           <p className="text-zinc-500 dark:text-zinc-400">{t.admin.users.description}</p>
         </div>
         <div className="flex items-center gap-3">
-          <input 
-            type="text"
-            placeholder={t.admin.users.searchPlaceholder}
-            value={keyword}
-            onChange={(e) => setKeyword(e.target.value)}
-            className="h-9 rounded-md border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 px-3 text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500"
-          />
+          <div className="relative">
+            <SearchIcon className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
+            <input 
+              type="text"
+              placeholder={t.admin.users.searchPlaceholder}
+              value={keyword}
+              onChange={(e) => setKeyword(e.target.value)}
+              className="h-9 w-64 rounded-md border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 pl-9 pr-3 text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500"
+            />
+          </div>
           <Button onClick={() => setCreateOpen(true)} className="flex items-center gap-2 h-9">
             <PlusIcon className="size-4" />
             {t.admin.users.createUser}

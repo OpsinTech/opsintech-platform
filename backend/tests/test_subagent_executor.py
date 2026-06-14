@@ -246,11 +246,6 @@ class TestAsyncExecutionPath:
         assert result.status == SubagentStatus.COMPLETED
         assert captured["config"] == {
             "recursion_limit": base_config.max_turns,
-            "configurable": {
-                "thread_id": "thread-ctx",
-                "user_id": "user-ctx",
-                "tenant_id": "tenant-ctx",
-            },
         }
         assert captured["context"] == {
             "thread_id": "thread-ctx",

@@ -151,11 +151,14 @@ mkdir -p logs
 
 GATEWAY_EXTRA_FLAGS=""
 
+# Ensure LangGraph URL matches the port used by serve.sh (2025)
+export LANGGRAPH_API_URL="${LANGGRAPH_API_URL:-http://localhost:2025}"
+
 echo "Starting LangGraph server..."
 # Read log_level from config.yaml, fallback to env var, then to "info"
 CONFIG_LOG_LEVEL=$(grep -m1 '^log_level:' config.yaml 2>/dev/null | awk '{print $2}' | tr -d ' ')
 LANGGRAPH_LOG_LEVEL="${LANGGRAPH_LOG_LEVEL:-${CONFIG_LOG_LEVEL:-info}}"
-(cd backend && PYTHONPATH=. uv run langgraph dev --host 0.0.0.0 --port 2025 --server-log-level "$LANGGRAPH_LOG_LEVEL" --no-browser > ../logs/langgraph.log 2>&1) &
+(cd backend && PYTHONPATH=. uv run langgraph dev --host 0.0.0.0 --port 2025 --server-log-level "$LANGGRAPH_LOG_LEVEL" --no-browser --allow-blocking > ../logs/langgraph.log 2>&1) &
 ./scripts/wait-for-port.sh 2025 60 "LangGraph" || {
     echo "✗ LangGraph failed to start. Last log output:"
     tail -60 logs/langgraph.log

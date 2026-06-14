@@ -1,6 +1,7 @@
 import logging
 import functools
 
+import httpx
 from langchain.chat_models import BaseChatModel
 
 from deerflow.config import get_app_config, get_tracing_config, is_tracing_enabled
@@ -66,11 +67,14 @@ def _maybe_patch_openai_model_class(use_path: str, model_class: type[BaseChatMod
         from langchain_openai import ChatOpenAI
 
         from deerflow.models.patched_openai import PatchedChatOpenAI
+        from deerflow.models.patched_minimax import PatchedChatMiniMax
     except Exception as exc:  # pragma: no cover - defensive fallback
         logger.debug("Failed to load PatchedChatOpenAI, using model class as-is: %s", exc)
         return model_class
 
     if issubclass(model_class, ChatOpenAI):
+        if "minimax" in use_path.lower():
+            return PatchedChatMiniMax
         return PatchedChatOpenAI
     return model_class
 
@@ -185,6 +189,10 @@ def create_chat_model(name: str | None = None, thinking_enabled: bool = False, *
             "thinking",
             "supports_vision",
             "supports_tools",
+            "supports_text2image",
+            "max_input_tokens",
+            "reasoning_effort",
+            "model_type",
         } | DATABASE_CONFIG_FIELDS,
     )
     # Compute effective when_thinking_enabled by merging in the `thinking` shortcut field.
@@ -203,7 +211,8 @@ def create_chat_model(name: str | None = None, thinking_enabled: bool = False, *
         if effective_wte.get("extra_body", {}).get("thinking", {}).get("type"):
             # OpenAI-compatible gateway: thinking is nested under extra_body
             kwargs.update({"extra_body": {"thinking": {"type": "disabled"}}})
-            kwargs.update({"reasoning_effort": "minimal"})
+            if model_config.supports_reasoning_effort:
+                kwargs.update({"reasoning_effort": "minimal"})
         elif effective_wte.get("thinking", {}).get("type"):
             # Native langchain_anthropic: thinking is a direct constructor parameter
             kwargs.update({"thinking": {"type": "disabled"}})
@@ -232,13 +241,34 @@ def create_chat_model(name: str | None = None, thinking_enabled: bool = False, *
 
     _normalize_openai_compatible_max_tokens(name, model_config.use, model_settings_from_config)
 
+    verify_ssl = model_settings_from_config.pop("verify_ssl", False)
+    if not verify_ssl:
+        kwargs.setdefault("http_client", httpx.Client(verify=False, trust_env=False))
+        kwargs.setdefault("http_async_client", httpx.AsyncClient(verify=False, trust_env=False))
+    # Internal/custom endpoints may not require API keys — provide a dummy placeholder
+    if not model_settings_from_config.get("api_key") and not model_settings_from_config.get("openai_api_key"):
+        model_settings_from_config["api_key"] = "not-needed"
+
+    # Map generic api_key to provider-specific parameter names
+    _use_lower = model_config.use.lower()
+    _api_key_val = model_settings_from_config.get("api_key")
+    if "google_genai" in _use_lower and _api_key_val and not model_settings_from_config.get("google_api_key"):
+        model_settings_from_config["google_api_key"] = model_settings_from_config.pop("api_key")
+    if "anthropic" in _use_lower and _api_key_val and not model_settings_from_config.get("anthropic_api_key"):
+        model_settings_from_config["anthropic_api_key"] = model_settings_from_config.pop("api_key")
+
+    # Anthropic requires max_tokens — inject a safe default if not configured
+    if "anthropic" in _use_lower and "max_tokens" not in model_settings_from_config:
+        model_settings_from_config["max_tokens"] = 8192
+
     logger.info(
-        "Creating model '%s': use=%s, base_url=%s, use_responses_api=%s, output_version=%s, settings_keys=%s",
+        "Creating model '%s': use=%s, base_url=%s, use_responses_api=%s, output_version=%s, verify_ssl=%s, settings_keys=%s",
         name,
         model_config.use,
         model_settings_from_config.get("base_url"),
         model_settings_from_config.get("use_responses_api"),
         model_settings_from_config.get("output_version"),
+        verify_ssl,
         list(model_settings_from_config.keys()),
     )
 

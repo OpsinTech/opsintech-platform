@@ -8,6 +8,8 @@ export interface ProviderTemplate {
   defaultSupportsThinking: boolean;
   defaultSupportsVision: boolean;
   defaultSupportsReasoningEffort: boolean;
+  defaultSupportsText2Image?: boolean;
+  defaultModelType?: string;
   note: string;
   noteEn: string;
 }
@@ -23,6 +25,7 @@ export const PROVIDER_TEMPLATES: ProviderTemplate[] = [
     defaultSupportsThinking: true,
     defaultSupportsVision: true,
     defaultSupportsReasoningEffort: true,
+    defaultSupportsText2Image: true,
     note: "",
     noteEn: "Connects to api.openai.com by default, no Base URL needed",
   },
@@ -56,14 +59,15 @@ export const PROVIDER_TEMPLATES: ProviderTemplate[] = [
     id: "deepseek",
     label: "DeepSeek",
     labelEn: "DeepSeek",
-    use: "langchain_deepseek.ChatDeepSeek",
-    baseUrl: "",
-    isOpenAICompatible: false,
+    use: "langchain_openai.ChatOpenAI",
+    baseUrl: "https://api.deepseek.com/v1",
+    isOpenAICompatible: true,
     defaultSupportsThinking: true,
     defaultSupportsVision: false,
     defaultSupportsReasoningEffort: false,
-    note: "DeepSeek 原生 provider",
-    noteEn: "Native DeepSeek provider",
+    defaultModelType: "reasoning",
+    note: "DeepSeek 开放平台，走 OpenAI-compatible 通道",
+    noteEn: "DeepSeek platform via OpenAI-compatible channel",
   },
   {
     id: "azure_openai",
@@ -71,10 +75,11 @@ export const PROVIDER_TEMPLATES: ProviderTemplate[] = [
     labelEn: "Azure OpenAI",
     use: "langchain_openai.AzureChatOpenAI",
     baseUrl: "",
-    isOpenAICompatible: false,
+    isOpenAICompatible: true,
     defaultSupportsThinking: true,
     defaultSupportsVision: true,
     defaultSupportsReasoningEffort: false,
+    defaultModelType: "chat",
     note: "Azure 部署需填写 endpoint 作为 Base URL，并确保 api_version 正确",
     noteEn: "Azure deployment requires endpoint as Base URL and correct api_version",
   },
@@ -88,6 +93,7 @@ export const PROVIDER_TEMPLATES: ProviderTemplate[] = [
     defaultSupportsThinking: true,
     defaultSupportsVision: true,
     defaultSupportsReasoningEffort: false,
+    defaultSupportsText2Image: true,
     note: "需安装 langchain-google-genai 依赖",
     noteEn: "Requires langchain-google-genai dependency",
   },
@@ -95,14 +101,15 @@ export const PROVIDER_TEMPLATES: ProviderTemplate[] = [
     id: "ollama",
     label: "Ollama",
     labelEn: "Ollama",
-    use: "langchain_ollama.ChatOllama",
-    baseUrl: "http://localhost:11434",
-    isOpenAICompatible: false,
-    defaultSupportsThinking: false,
+    use: "langchain_openai.ChatOpenAI",
+    baseUrl: "http://localhost:11434/v1",
+    isOpenAICompatible: true,
+    defaultSupportsThinking: true,
     defaultSupportsVision: false,
     defaultSupportsReasoningEffort: false,
-    note: "本地部署模型，默认连接 localhost:11434",
-    noteEn: "Local deployment, connects to localhost:11434 by default",
+    defaultModelType: "chat",
+    note: "本地部署，需填写 Base URL 为 http://localhost:11434/v1",
+    noteEn: "Local deployment, set Base URL to http://localhost:11434/v1",
   },
   {
     id: "openrouter",

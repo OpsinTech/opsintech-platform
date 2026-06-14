@@ -1,6 +1,8 @@
+import asyncio
 import logging
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
+from datetime import UTC, datetime, timedelta
 
 from fastapi import FastAPI
 
@@ -9,6 +11,7 @@ from app.gateway.config import get_gateway_config
 from app.gateway.routers import (
     admin,
     agents,
+    alerts,
     announcements,
     artifacts,
     auth as auth_routes,
@@ -18,6 +21,7 @@ from app.gateway.routers import (
     models,
     skills,
     suggestions,
+    templates,
     tenants,
     threads,
     uploads,
@@ -72,7 +76,8 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
             raise RuntimeError(f"Alembic exited with code {result.returncode}")
         logger.info("Database migrations completed successfully")
     except Exception:
-        logger.exception("Database migration failed — continuing with bootstrap")
+        logger.exception("Database migration failed — aborting startup")
+        raise
 
     bootstrap_admin()
 
@@ -90,7 +95,31 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     except Exception:
         logger.exception("No IM channels configured or channel service failed to start")
 
+    # Run raw_alerts cleanup on startup
+    try:
+        from app.alerting.cleanup import cleanup_raw_alerts
+        from deerflow.database.session import get_session_factory
+
+        async with get_session_factory()() as cleanup_session:
+            deleted = await cleanup_raw_alerts(cleanup_session)
+            if deleted:
+                logger.info("Startup cleanup: removed %d old raw_alerts", deleted)
+    except Exception:
+        logger.exception("Raw alert cleanup failed on startup")
+
+    # Start background tasks
+    digest_task = asyncio.create_task(_run_digest_scheduler())
+    health_task = asyncio.create_task(_run_health_monitor())
+
     yield
+
+    for task in [digest_task, health_task]:
+        task.cancel()
+    for task in [digest_task, health_task]:
+        try:
+            await task
+        except asyncio.CancelledError:
+            pass
 
     # Stop channel service on shutdown
     try:
@@ -220,6 +249,9 @@ This gateway provides custom endpoints for models, MCP configuration, skills, an
     # Uploads API is mounted at /api/threads/{thread_id}/uploads
     app.include_router(uploads.router)
 
+    # Templates API is mounted at /api/templates
+    app.include_router(templates.router)
+
     # Thread cleanup API is mounted at /api/threads/{thread_id}
     app.include_router(threads.router)
 
@@ -237,12 +269,17 @@ This gateway provides custom endpoints for models, MCP configuration, skills, an
 
     # Channels API is mounted at /api/channels
     app.include_router(channels.router)
+    app.include_router(channels.im_settings_router)
 
     # Admin API is mounted at /api/admin
     app.include_router(admin.router)
 
     # Announcements APIs are mounted at /api/admin/announcements and /api/announcements
     app.include_router(announcements.router)
+
+    # Alerting APIs — ingest is unauthenticated (source-level token auth);
+    # incident list/detail and source management require normal auth.
+    app.include_router(alerts.router)
 
     @app.get("/health", tags=["health"])
     async def health_check() -> dict:
@@ -254,6 +291,80 @@ This gateway provides custom endpoints for models, MCP configuration, skills, an
         return {"status": "healthy", "service": "opsintech-gateway"}
 
     return app
+
+
+# ---------------------------------------------------------------------------
+# Background scheduler for daily digest
+# ---------------------------------------------------------------------------
+
+
+async def _run_digest_scheduler() -> None:
+    """Check every 60s if any tenant's digest is due, fire send_daily_digest."""
+    fired_dates: dict[str, set[str]] = {}  # tenant_id -> set of "HH:MM" already fired today
+    _last_reset_date: str = ""
+
+    while True:
+        try:
+            from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
+
+            now = datetime.now(UTC)
+            today = now.strftime("%Y%m%d")
+            current_utc_time = now.strftime("%H:%M")
+
+            # Reset fired_dates when the day rolls over (UTC baseline)
+            if today != _last_reset_date:
+                _last_reset_date = today
+                fired_dates = {}
+
+            from app.alerting.notify import send_daily_digest
+            from app.models.alerting import AlertingSettings
+            from sqlalchemy import select
+            from deerflow.database.session import get_session_factory
+
+            async with get_session_factory()() as session:
+                result = await session.exec(select(AlertingSettings))
+                for settings in result.scalars().all():
+                    cfg = settings.notification_config or {}
+                    digest = cfg.get("digest", {})
+                    if not digest.get("enabled"):
+                        continue
+
+                    # Resolve the configured digest time in the tenant's timezone
+                    digest_time = digest.get("time", "09:00")
+                    tz_name = cfg.get("timezone", "UTC")
+                    try:
+                        tz = ZoneInfo(tz_name)
+                    except (ZoneInfoNotFoundError, KeyError):
+                        tz = ZoneInfo("UTC")
+                    local_now = now.astimezone(tz)
+                    if digest_time != local_now.strftime("%H:%M"):
+                        continue
+
+                    # Avoid duplicate firing within the same day (in the tenant's timezone)
+                    tenant_key = settings.tenant_id
+                    if digest_time in fired_dates.get(tenant_key, set()):
+                        continue
+
+                    fired_dates.setdefault(tenant_key, set()).add(digest_time)
+                    logger.info("digest: firing for tenant=%s at %s (tz=%s)", tenant_key, digest_time, tz_name)
+                    await send_daily_digest(tenant_key)
+
+        except Exception:
+            logger.exception("digest scheduler error")
+
+        await asyncio.sleep(60)
+
+
+async def _run_health_monitor() -> None:
+    """Check alert source health every 5 minutes."""
+    while True:
+        try:
+            from app.alerting.health_monitor import check_source_health
+
+            await check_source_health()
+        except Exception:
+            logger.exception("health monitor error")
+        await asyncio.sleep(300)  # every 5 minutes
 
 
 # Create app instance for uvicorn

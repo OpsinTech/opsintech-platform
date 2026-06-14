@@ -102,9 +102,6 @@ def _build_runtime_middlewares(
 
         provider_cls = resolve_variable(guardrails_config.provider.use)
         provider_kwargs = dict(guardrails_config.provider.config) if guardrails_config.provider.config else {}
-        # Pass framework hint if the provider accepts it (e.g. for config discovery).
-        # Built-in providers like AllowlistProvider don't need it, so only inject
-        # when the constructor accepts 'framework' or '**kwargs'.
         if "framework" not in provider_kwargs:
             try:
                 sig = inspect.signature(provider_cls.__init__)
@@ -124,6 +121,19 @@ def _build_runtime_middlewares(
     from deerflow.agents.middlewares.model_error_handling_middleware import ModelErrorHandlingMiddleware
 
     middlewares.append(ModelErrorHandlingMiddleware())
+
+    from deerflow.agents.middlewares.loop_detection_middleware import LoopDetectionMiddleware
+
+    middlewares.append(LoopDetectionMiddleware())
+
+    from deerflow.agents.middlewares.token_usage_middleware import TokenUsageMiddleware
+
+    middlewares.append(TokenUsageMiddleware())
+
+    from deerflow.agents.middlewares.deferred_tool_filter_middleware import DeferredToolFilterMiddleware
+
+    middlewares.append(DeferredToolFilterMiddleware())
+
     return middlewares
 
 

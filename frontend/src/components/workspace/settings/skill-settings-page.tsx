@@ -120,10 +120,10 @@ function SkillSettingsList({
             <Item className="w-full" variant="outline" key={uniqueKey}>
               <ItemContent>
                 <ItemTitle>
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 min-w-0">
                     {skill.name}
                     {skill.scope && (
-                      <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium border ${scopeBadgeStyle} hidden sm:inline-block`}>
+                      <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium border ${scopeBadgeStyle} hidden sm:inline-block shrink-0 whitespace-nowrap`}>
                         {scopeLabel(skill.scope)}
                       </span>
                     )}

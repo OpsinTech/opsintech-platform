@@ -8,6 +8,14 @@ function withToken(url: string, token?: string) {
   return `${url}${url.includes("?") ? "&" : "?"}token=${encodeURIComponent(token)}`;
 }
 
+export function ensureLeadingSlash(path: string): string {
+  if (!path) return "/";
+  if (path.includes("://") || path.startsWith("write-file:") || path.startsWith("mcp-result:") || path.startsWith("file:")) {
+    return path;
+  }
+  return path.startsWith("/") ? path : `/${path}`;
+}
+
 export function urlOfArtifact({
   filepath,
   threadId,
@@ -21,14 +29,15 @@ export function urlOfArtifact({
   isMock?: boolean;
   token?: string;
 }) {
+  const cleanPath = ensureLeadingSlash(filepath);
   if (isMock) {
     return withToken(
-      `${getBackendBaseURL()}/mock/api/threads/${threadId}/artifacts${filepath}${download ? "?download=true" : ""}`,
+      `${getBackendBaseURL()}/mock/api/threads/${threadId}/artifacts${cleanPath}${download ? "?download=true" : ""}`,
       token,
     );
   }
   return withToken(
-    `${getBackendBaseURL()}/api/threads/${threadId}/artifacts${filepath}${download ? "?download=true" : ""}`,
+    `${getBackendBaseURL()}/api/threads/${threadId}/artifacts${cleanPath}${download ? "?download=true" : ""}`,
     token,
   );
 }
@@ -42,8 +51,9 @@ export function resolveArtifactURL(
   threadId: string,
   token?: string,
 ) {
+  const cleanPath = ensureLeadingSlash(absolutePath);
   return withToken(
-    `${getBackendBaseURL()}/api/threads/${threadId}/artifacts${absolutePath}`,
+    `${getBackendBaseURL()}/api/threads/${threadId}/artifacts${cleanPath}`,
     token,
   );
 }

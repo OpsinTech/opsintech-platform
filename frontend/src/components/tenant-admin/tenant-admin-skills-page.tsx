@@ -1,6 +1,6 @@
 "use client";
 
-import { Pencil, Plus, Trash2, Upload } from "lucide-react";
+import { Pencil, Plus, Trash2, Upload, SearchIcon } from "lucide-react";
 import { useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
@@ -220,12 +220,15 @@ export function TenantAdminSkillsPage() {
               <TabsTrigger value="builtin">{t.tenantAdmin.skills.tabs.builtin} ({filteredBuiltInSkills.length})</TabsTrigger>
               <TabsTrigger value="custom">{t.tenantAdmin.skills.tabs.custom} ({filteredCustomSkills.length})</TabsTrigger>
             </TabsList>
-            <Input
-              placeholder={t.tenantAdmin.skills.searchPlaceholder}
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="h-9 max-w-xs"
-            />
+            <div className="relative w-full max-w-xs">
+              <SearchIcon className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder={t.tenantAdmin.skills.searchPlaceholder}
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="pl-9 h-9 max-w-xs"
+              />
+            </div>
             <select 
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value as any)}
@@ -534,9 +537,17 @@ function SkillSection({
                 return (
                   <tr key={skill.name} className="transition-colors hover:bg-muted/30">
                     <td className="px-4 py-3 align-top">
-                      <div className="truncate font-medium text-foreground" title={skill.name}>
+                      <a
+                        href={`/workspace/skills/${skill.name}`}
+                        className="truncate font-medium text-foreground hover:text-primary transition-colors"
+                        title={skill.name}
+                        onClick={(e) => {
+                          e.preventDefault();
+                          window.open(`/workspace/skills/${skill.name}`, "_blank");
+                        }}
+                      >
                         {skill.name}
-                      </div>
+                      </a>
                     </td>
                     <td className="px-4 py-3 align-top">
                       <div className="line-clamp-2 truncate text-muted-foreground" title={skill.description}>

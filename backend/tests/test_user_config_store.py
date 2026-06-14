@@ -253,7 +253,7 @@ def test_resolve_db_url_from_config_falls_back_to_default_when_database_missing(
 
     monkeypatch.setattr(store, "_resolve_config_path", lambda: config_file)
 
-    assert store._resolve_db_url_from_config() == "sqlite+pysqlite:///./.opsintech/tenant.db"
+    assert store._resolve_db_url_from_config() == "sqlite+pysqlite:///.opsintech/tenant.db"
 
 
 def test_resolve_db_url_from_config_supports_env_placeholder(monkeypatch, tmp_path):

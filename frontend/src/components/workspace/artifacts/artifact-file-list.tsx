@@ -13,7 +13,7 @@ import { Button } from "@/components/ui/button";
 import { useThread } from "@/components/workspace/messages/context";
 import { fetchAuthApi } from "@/core/api/auth-client";
 import { loadArtifactContentFromToolCall } from "@/core/artifacts/loader";
-import { urlOfArtifact } from "@/core/artifacts/utils";
+import { ensureLeadingSlash, urlOfArtifact } from "@/core/artifacts/utils";
 import { useI18n } from "@/core/i18n/hooks";
 import { installSkill } from "@/core/skills/api";
 import { useCurrentTenant } from "@/core/tenants/hooks";
@@ -325,7 +325,7 @@ function ArtifactDownloadButton({ file, threadId }: { file: string; threadId: st
       }
 
       const response = await fetchAuthApi(
-        `/api/threads/${threadId}/artifacts${file}?download=true`,
+        `/api/threads/${threadId}/artifacts${ensureLeadingSlash(file)}?download=true`,
       );
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}`);

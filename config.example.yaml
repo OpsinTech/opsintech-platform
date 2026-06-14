@@ -85,21 +85,17 @@ summarization:
 
   trigger:
     - type: tokens
-      value: 15564
-    # - type: messages
-    #   value: 50
-    # - type: fraction
-    #   value: 0.8
+      value: 12000
 
   keep:
     type: messages
-    value: 10
+    value: 5
     # type: tokens
     # value: 3000
     # type: fraction
     # value: 0.3
 
-  trim_tokens_to_summarize: 15564
+  trim_tokens_to_summarize: 8000
   summary_prompt: null
 
 # ============================================================================

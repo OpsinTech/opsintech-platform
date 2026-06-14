@@ -1,0 +1,1 @@
+"""Alerting business domain package."""

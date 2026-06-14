@@ -544,6 +544,209 @@ def ensure_thread_directories_exist(runtime: ToolRuntime[ContextT, ThreadState] 
     runtime.state["thread_directories_created"] = True
 
 
+def _run_async(coro):
+    import asyncio
+    import concurrent.futures
+    try:
+        loop = asyncio.get_running_loop()
+    except RuntimeError:
+        return asyncio.run(coro)
+    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as ex:
+        return ex.submit(asyncio.run, coro).result()
+
+
+def _get_selected_image_model(thread_id: str) -> str | None:
+    from deerflow.agents.checkpointer import get_checkpointer
+
+    try:
+        checkpointer = get_checkpointer()
+        if not checkpointer:
+            return None
+    except Exception:
+        return None
+
+    config = {"configurable": {"thread_id": thread_id}}
+    try:
+        checkpoint_tuple = checkpointer.get_tuple(config)
+        if not checkpoint_tuple or not checkpoint_tuple.checkpoint:
+            return None
+    except Exception:
+        return None
+
+    channel_values = checkpoint_tuple.checkpoint.get("channel_values", {})
+    messages = channel_values.get("messages", [])
+
+    # Iterate from latest to oldest
+    for msg in reversed(messages):
+        content = ""
+        if isinstance(msg, dict):
+            content = msg.get("content", "")
+        elif hasattr(msg, "content"):
+            content = msg.content
+
+        if isinstance(content, list):
+            text_parts = []
+            for part in content:
+                if isinstance(part, dict) and part.get("type") == "text":
+                    text_parts.append(part.get("text", ""))
+                elif isinstance(part, str):
+                    text_parts.append(part)
+            content = "\n".join(text_parts)
+
+        if not isinstance(content, str):
+            content = str(content)
+
+        if "[SYSTEM CONTEXT: ppt-master]" in content:
+            import re
+            match = re.search(r"-\s*image_model:\s*([^\n]+)", content)
+            if match:
+                return match.group(1).strip()
+    return None
+
+
+async def _fetch_model_config(user_id: str, tenant_id: str | None, model_name: str) -> dict[str, any] | None:
+    from typing import Any
+    from sqlalchemy import select
+    from deerflow.database.session import get_session_factory
+    from deerflow.database.models import TenantModelConfig
+    from deerflow.database.user_config_service import (
+        PLATFORM_MODEL_OWNER_ID,
+        _tenant_shared_model_owner_id,
+        _get_scoped_model_rows,
+    )
+    from deerflow.database.secrets_crypto import decrypt_model_settings
+
+    session_factory = get_session_factory()
+    async with session_factory() as session:
+        # Check user-private models first, then tenant-shared, then global
+        user_rows = await _get_scoped_model_rows(session, user_id, tenant_id)
+        for row in user_rows:
+            if row.name == model_name:
+                return {"use": row.use, "model": row.model, "settings": decrypt_model_settings(dict(row.settings or {}))}
+
+        if tenant_id:
+            tenant_rows = (
+                await session.execute(
+                    select(TenantModelConfig).where(
+                        TenantModelConfig.user_id == _tenant_shared_model_owner_id(tenant_id),
+                        TenantModelConfig.tenant_id == tenant_id,
+                        TenantModelConfig.name == model_name,
+                    )
+                )
+            ).scalars().all()
+            for row in tenant_rows:
+                return {"use": row.use, "model": row.model, "settings": decrypt_model_settings(dict(row.settings or {}))}
+
+        global_rows = (
+            await session.execute(
+                select(TenantModelConfig).where(
+                    TenantModelConfig.user_id == PLATFORM_MODEL_OWNER_ID,
+                    TenantModelConfig.tenant_id.is_(None),
+                    TenantModelConfig.name == model_name,
+                )
+            )
+        ).scalars().all()
+        for row in global_rows:
+            if row.name == model_name:
+                return {"use": row.use, "model": row.model, "settings": decrypt_model_settings(dict(row.settings or {}))}
+
+    return None
+
+
+MAX_LINES_PER_READ = 200
+MAX_LS_ENTRIES = 500
+
+
+def _apply_line_limit(content: str, start_line: int | None, end_line: int | None) -> str:
+    if not content:
+        return "(empty)"
+
+    lines = content.splitlines()
+    total_lines = len(lines)
+
+    if start_line is None:
+        start_line = 1
+    if end_line is None:
+        end_line = total_lines
+
+    start_line = max(1, start_line)
+    end_line = min(total_lines, end_line)
+
+    if end_line - start_line + 1 > MAX_LINES_PER_READ:
+        end_line = start_line + MAX_LINES_PER_READ - 1
+
+    content_slice = "\n".join(lines[start_line - 1 : end_line])
+
+    if end_line < total_lines:
+        warning = (
+            f"\n\n[System Warning: The file has {total_lines} lines in total. "
+            f"Only lines {start_line} to {end_line} are shown here. "
+            f"Use the read_file tool again with start_line={end_line + 1} to read the next chunk.]"
+        )
+        content_slice += warning
+
+    return content_slice
+
+
+def _get_text2image_env(user_id: str, tenant_id: str | None, thread_id: str) -> dict[str, str]:
+    from typing import Any
+    image_model_name = _get_selected_image_model(thread_id)
+    if not image_model_name or image_model_name.lower() == "none":
+        return {}
+
+    # Retrieve configuration from DB
+    try:
+        model_config = _run_async(_fetch_model_config(user_id, tenant_id, image_model_name))
+    except Exception:
+        model_config = None
+
+    if not model_config:
+        return {}
+
+    use = model_config.get("use", "")
+    settings = model_config.get("settings", {})
+    api_key = settings.get("api_key", "")
+    base_url = settings.get("base_url", "")
+
+    PROVIDER_MAP = {
+        "langchain_openai.ChatOpenAI": "openai",
+        "langchain_google_genai.ChatGoogleGenerativeAI": "gemini",
+        "langchain_google_genai.ChatGoogleGenerativeAI.ChatGoogleGenerativeAI": "gemini",
+        "langchain_anthropic.ChatAnthropic": "anthropic",
+        "langchain_aws.ChatBedrock": "bedrock",
+    }
+
+    provider = PROVIDER_MAP.get(use)
+    if not provider:
+        use_lower = use.lower()
+        if "openai" in use_lower:
+            provider = "openai"
+        elif "google" in use_lower or "gemini" in use_lower:
+            provider = "gemini"
+        elif "anthropic" in use_lower:
+            provider = "anthropic"
+        elif "bedrock" in use_lower:
+            provider = "bedrock"
+        else:
+            provider = "openai"  # fallback
+
+    env = {}
+    if provider == "openai":
+        env["IMAGE_BACKEND"] = "openai"
+        if api_key:
+            env["OPENAI_API_KEY"] = api_key
+        if base_url:
+            env["OPENAI_BASE_URL"] = base_url
+    elif provider == "gemini":
+        env["IMAGE_BACKEND"] = "gemini"
+        if api_key:
+            env["GEMINI_API_KEY"] = api_key
+            env["GOOGLE_API_KEY"] = api_key
+        if base_url:
+            env["GEMINI_BASE_URL"] = base_url
+    return env
+
+
 @tool("bash", parse_docstring=True)
 def bash_tool(runtime: ToolRuntime[ContextT, ThreadState], description: str, command: str) -> str:
     """Execute a bash command in a Linux environment.
@@ -561,12 +764,23 @@ def bash_tool(runtime: ToolRuntime[ContextT, ThreadState], description: str, com
         sandbox = ensure_sandbox_initialized(runtime)
         ensure_thread_directories_exist(runtime)
         thread_data = get_thread_data(runtime)
+
+        thread_id = runtime.context.get("thread_id") if runtime.context else None
+        user_id = runtime.context.get("user_id") if runtime.context else None
+        tenant_id = runtime.context.get("tenant_id") if runtime.context else None
+
+        env = {}
+        if thread_id and user_id:
+            env = _get_text2image_env(user_id, tenant_id, thread_id)
+
         if is_local_sandbox(runtime):
             validate_local_bash_command_paths(command, thread_data)
             command = replace_virtual_paths_in_command(command, thread_data)
-            output = sandbox.execute_command(command)
-            return mask_local_paths_in_output(output, thread_data)
-        return sandbox.execute_command(command)
+            output = sandbox.execute_command(command, env=env)
+            output = mask_local_paths_in_output(output, thread_data)
+        else:
+            output = sandbox.execute_command(command, env=env)
+        return _apply_line_limit(output, None, None)
     except SandboxError as e:
         return f"Error: {e}"
     except PermissionError as e:
@@ -597,6 +811,12 @@ def ls_tool(runtime: ToolRuntime[ContextT, ThreadState], description: str, path:
         children = sandbox.list_dir(path)
         if not children:
             return "(empty)"
+        total_entries = len(children)
+        if total_entries > MAX_LS_ENTRIES:
+            children = children[:MAX_LS_ENTRIES]
+            result = "\n".join(children)
+            result += f"\n\n[System Warning: The directory has {total_entries} entries in total. Only {MAX_LS_ENTRIES} entries are shown here. Use ls tool on subdirectories to explore further.]"
+            return result
         return "\n".join(children)
     except SandboxError as e:
         return f"Error: {e}"
@@ -636,11 +856,7 @@ def read_file_tool(
             else:
                 path = _resolve_and_validate_user_data_path(path, thread_data)
         content = sandbox.read_file(path)
-        if not content:
-            return "(empty)"
-        if start_line is not None and end_line is not None:
-            content = "\n".join(content.splitlines()[start_line - 1 : end_line])
-        return content
+        return _apply_line_limit(content, start_line, end_line)
     except SandboxError as e:
         return f"Error: {e}"
     except FileNotFoundError:

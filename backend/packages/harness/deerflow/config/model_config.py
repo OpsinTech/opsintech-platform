@@ -28,7 +28,16 @@ class ModelConfig(BaseModel):
         description="Extra settings to be passed to the model when thinking is enabled",
     )
     supports_vision: bool = Field(default_factory=lambda: False, description="Whether the model supports vision/image inputs")
+    supports_text2image: bool = Field(default_factory=lambda: False, description="Whether the model supports text-to-image (image generation)")
     supports_tools: bool = Field(default=True, description="Whether the model supports tool/function calling")
+    max_input_tokens: int | None = Field(
+        default=None,
+        description="Maximum input tokens (context window) for this model. Used for auto-calculating summarization thresholds.",
+    )
+    model_type: str | None = Field(
+        default=None,
+        description="Model category: chat, code, reasoning, vision, text2image, multimodal. Used for auto-inferring capabilities.",
+    )
     thinking: dict | None = Field(
         default_factory=lambda: None,
         description=(

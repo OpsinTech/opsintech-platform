@@ -1,5 +1,5 @@
-import { AgentGallery } from "@/components/workspace/agents/agent-gallery";
+import { redirect } from "next/navigation";
 
 export default function AgentsPage() {
-  return <AgentGallery />;
+  redirect("/tenant-admin/agents");
 }

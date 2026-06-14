@@ -69,6 +69,7 @@ export function ModelLifecycleSettingsPage({ readOnly = false }: { readOnly?: bo
   const [supportsThinking, setSupportsThinking] = useState(false);
   const [supportsReasoningEffort, setSupportsReasoningEffort] = useState(false);
   const [supportsVision, setSupportsVision] = useState(false);
+  const [supportsText2Image, setSupportsText2Image] = useState(false);
   const [useResponsesApi, setUseResponsesApi] = useState(false);
   const [outputVersion, setOutputVersion] = useState("");
   const [maxTokens, setMaxTokens] = useState("");
@@ -92,6 +93,7 @@ export function ModelLifecycleSettingsPage({ readOnly = false }: { readOnly?: bo
     setSupportsThinking(false);
     setSupportsReasoningEffort(false);
     setSupportsVision(false);
+    setSupportsText2Image(false);
     setUseResponsesApi(false);
     setOutputVersion("");
     setMaxTokens("");
@@ -112,6 +114,7 @@ export function ModelLifecycleSettingsPage({ readOnly = false }: { readOnly?: bo
     setSupportsThinking(template.defaultSupportsThinking);
     setSupportsReasoningEffort(template.defaultSupportsReasoningEffort);
     setSupportsVision(template.defaultSupportsVision);
+    setSupportsText2Image(Boolean(template.defaultSupportsText2Image));
     setProviderId(id);
   };
 
@@ -157,6 +160,7 @@ export function ModelLifecycleSettingsPage({ readOnly = false }: { readOnly?: bo
             supports_thinking: supportsThinking,
             supports_reasoning_effort: supportsReasoningEffort,
             supports_vision: supportsVision,
+            supports_text2image: supportsText2Image,
             use_responses_api: useResponsesApi,
             output_version: outputVersion.trim() || undefined,
             max_tokens: maxTokens.trim() ? Number(maxTokens) : undefined,
@@ -184,6 +188,7 @@ export function ModelLifecycleSettingsPage({ readOnly = false }: { readOnly?: bo
           supports_thinking: supportsThinking,
           supports_reasoning_effort: supportsReasoningEffort,
           supports_vision: supportsVision,
+          supports_text2image: supportsText2Image,
           use_responses_api: useResponsesApi,
           output_version: outputVersion.trim() || undefined,
           max_tokens: maxTokens.trim() ? Number(maxTokens) : undefined,
@@ -398,6 +403,12 @@ export function ModelLifecycleSettingsPage({ readOnly = false }: { readOnly?: bo
                   </div>
                   <div className="flex items-center justify-between rounded-lg border bg-card p-4 shadow-sm">
                     <label className="text-sm font-medium leading-none">
+                      {t.settings.modelLifecycle.register.fields.supportsText2Image}
+                    </label>
+                    <Switch checked={supportsText2Image} onCheckedChange={setSupportsText2Image} disabled={isMutating} />
+                  </div>
+                  <div className="flex items-center justify-between rounded-lg border bg-card p-4 shadow-sm">
+                    <label className="text-sm font-medium leading-none">
                       {t.settings.modelLifecycle.register.fields.useResponsesApi}
                     </label>
                     <Switch checked={useResponsesApi} onCheckedChange={setUseResponsesApi} disabled={isMutating} />
@@ -558,23 +569,28 @@ function ModelItem({
 
   return (
     <div className={`flex items-center justify-between rounded-xl border bg-card p-4 shadow-sm transition-colors hover:bg-card ${!isEnabled ? "opacity-60 grayscale-[50%]" : ""}`}>
-      <div className="flex flex-col gap-1 min-w-0 pr-4 flex-1">
-        <div className="flex flex-row items-center gap-2">
+      <div className="flex flex-col gap-1.5 min-w-0 pr-4 flex-1">
+        <div className="flex flex-row items-center gap-2 min-w-0">
           <h4 className="font-semibold text-base leading-tight truncate" title={model.display_name || model.name}>
             {model.display_name || model.name}
           </h4>
-          <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium border ${scopeBadgeStyle} hidden sm:inline-block`}>
+          <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium border ${scopeBadgeStyle} hidden sm:inline-block shrink-0 whitespace-nowrap`}>
             {scopeLabel(model.scope)}
           </span>
-          <span className="text-xs px-2 py-0.5 rounded-full bg-muted text-muted-foreground font-mono truncate">
+        </div>
+        <div className="flex flex-row items-center gap-2 min-w-0 text-xs text-muted-foreground">
+          <span 
+            className="px-2 py-0.5 rounded-full bg-muted font-mono truncate max-w-[280px] sm:max-w-[400px] shrink-0" 
+            title={model.model}
+          >
             {model.model}
           </span>
+          {model.description && (
+            <span className="truncate flex-1" title={model.description}>
+              {model.description}
+            </span>
+          )}
         </div>
-        {model.description && (
-          <p className="text-sm text-muted-foreground line-clamp-1">
-            {model.description}
-          </p>
-        )}
       </div>
 
       <div className="flex items-center gap-4 shrink-0">
