@@ -13,6 +13,7 @@ OpsinTech is an **AI-Native Operations Platform for production environments**. v
 
 ## Table of Contents
 
+- [Platform Features](#platform-features)
 - [Why OpsinTech Exists](#why-opsintech-exists)
 - [v1.0 — What We Built](#v10--what-we-built)
 - [Our Vision](#our-vision)
@@ -24,6 +25,56 @@ OpsinTech is an **AI-Native Operations Platform for production environments**. v
 - [Contributing](#contributing)
 - [License](#license)
 - [Acknowledgments](#acknowledgments)
+
+## Platform Features
+
+OpsinTech transforms AI Agents into a governed production platform with the following capabilities:
+
+### 🏠 Multi-Tenancy Workspace
+A unified workspace with three-tier resource isolation (`user → tenant → global`). Each user gets a personal tenant on registration, and tenant admins manage members, models, tools, and skills independently.
+
+**Modules:**
+- **Overview** — Dashboard with key metrics and quick actions
+- **Agent Gallery** — Browse and select AI agents for different tasks
+- **Chat Workspace** — Conversational AI interface with artifact management
+- **Terminal Agent** — Governed terminal with AI-assisted command execution, asset management, and approval workflows
+- **Skill Editor** — Create, edit, and test AI Skills with sandbox testing and AI-assisted instruction generation
+- **Incident Management** — Alert ingestion, signal analysis, and incident lifecycle tracking
+
+### 🤖 Agent Capabilities
+
+| Capability | Description |
+|---|---|
+| **Chat Agent** | Conversational AI with task decomposition, sub-agent parallelism, and artifact generation |
+| **Terminal Agent** | AI-assisted terminal with security governance, command approval, and multi-host asset management |
+| **Skill System** | Reusable AI Skill templates with sandbox testing environment |
+| **MCP Servers** | Configurable MCP servers per tenant (stdio/SSE/HTTP transports) |
+| **Sandbox Execution** | Isolated code execution (local / Docker / Kubernetes modes) |
+
+### 🔐 Security & Governance
+
+| Feature | Description |
+|---|---|
+| **RBAC** | Three-tier roles: `platform_admin` / `tenant_admin` / `tenant_member` |
+| **Audit Trail** | Full operation audit logging with per-tenant isolation |
+| **Terminal Security** | Command approval workflows, credential management, execution audit |
+| **User Management** | Status management (active / suspended), mandatory password rotation |
+
+### 🌐 Platform Administration
+
+| Dashboard | Scope |
+|---|---|
+| **Platform Admin** | Users, tenants, global audit, model templates, announcements |
+| **Tenant Admin** | Members, models, tools, skills, MCP servers |
+
+### 🎨 User Experience
+
+- **4-Language i18n**: English, 中文, 日本語, 한국어
+- **Model Provider Templates**: 20+ pre-configured providers with auto-filled settings
+- **Docker One-Click Deploy**: `make up` to get everything running
+- **Hot-Reload Dev Mode**: `make dev` for local development
+
+---
 
 ## Why OpsinTech Exists
 
@@ -69,6 +120,28 @@ We're not starting from scratch. DeerFlow's Agent runtime is one of the most mat
 - Models stored in database, assigned per-tenant, with active / deprecated / retired lifecycle
 - Providers: OpenAI · Anthropic · DeepSeek · Azure OpenAI · Gemini · Ollama · OpenRouter · Groq · Together AI · SiliconFlow · DashScope · Zhipu · Moonshot · MiniMax · Baichuan · 01.AI · Volcengine Ark · Novita AI
 
+### Terminal Agent
+
+- **Governed Terminal Execution**: AI-assisted command execution with security policies
+- **Multi-Host Asset Management**: Register and manage multiple target hosts
+- **Command Approval Workflow**: Security review and approval before execution
+- **Audit Trail**: Every command and its output is logged and auditable
+- **Skill Integration**: Save terminal sessions as reusable Skills
+
+### Skill System
+
+- **Skill Editor**: Full-featured editor with Markdown instruction editing
+- **AI-Assisted Generation**: Describe what you want, AI generates structured instructions
+- **Sandbox Testing**: Test Skills in a safe mock environment before production use
+- **Per-Tenant Management**: Skills scoped to personal, tenant, or global levels
+
+### Incident Management
+
+- **Alert Ingestion**: Webhook / Alertmanager integration
+- **Signal Analysis**: Raw alerts processed into structured signals
+- **Incident Lifecycle**: Track incidents from creation to resolution
+- **AI Analysis**: Automated incident context assembly and root cause analysis
+
 ### Audit & Security
 
 - Full audit trail for all operations, per-tenant isolation
@@ -105,6 +178,8 @@ This space is almost entirely vacant in open source. That's why we need communit
   ├─ Multi-tenancy + RBAC + Audit
   ├─ 20+ model provider templates, database-backed
   ├─ Visual admin dashboards (platform + tenant)
+  ├─ Terminal Agent with security governance
+  ├─ Skill System with sandbox testing
   └─ Docker one-command deploy
 
 🔜 v1.1 — Smart Alerting
