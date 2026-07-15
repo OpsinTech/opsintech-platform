@@ -200,6 +200,47 @@ export const ja: Translations = {
     skillsPlaza: "スキルプラザ",
   },
 
+  // File Center
+  fileCenter: {
+    rootFolder: "ルートフォルダ",
+    newFolder: "新規フォルダ",
+    upload: "ファイルをアップロード",
+    searchPlaceholder: "ファイルとフォルダを検索...",
+    allTypes: "すべてのタイプ",
+    sourceTypes: {
+      upload: "手動アップロード",
+      aiGenerated: "AI生成",
+      business: "ビジネスファイル",
+    },
+    visibility: {
+      private: "プライベート",
+      tenantShared: "ワークスペース共有",
+    },
+    viewModes: {
+      preview: "プレビュー",
+      source: "ソース",
+    },
+    actions: {
+      openInNewTab: "新しいタブで開く",
+      download: "ダウンロード",
+    },
+    deleteConfirm: {
+      file: (name: string) => `ファイル ${name} を削除してもよろしいですか？`,
+      folder: (name: string) => `フォルダ ${name} を削除してもよろしいですか？`,
+    },
+    messages: {
+      folderCreated: (name: string) => `フォルダ ${name} が作成されました`,
+      createFolderFailed: "フォルダの作成に失敗しました",
+      fileUploaded: (name: string) => `ファイル ${name} がアップロードされました`,
+      uploadFailed: (name: string) => `ファイル ${name} のアップロードに失敗しました`,
+      fileDeleted: (name: string) => `ファイル ${name} が削除されました`,
+      deleteFileFailed: "ファイルの削除に失敗しました",
+      folderDeleted: (name: string) => `フォルダ ${name} が削除されました`,
+      deleteFolderFailed: "フォルダの削除に失敗しました",
+      emptyState: "ファイルまたはフォルダが見つかりません",
+    },
+  },
+
   // Agents
   agents: {
     title: "エージェント",

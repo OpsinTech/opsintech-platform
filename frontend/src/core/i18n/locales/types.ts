@@ -146,6 +146,47 @@ export interface Translations {
     skillsPlaza: string;
   };
 
+  // File Center
+  fileCenter: {
+    rootFolder: string;
+    newFolder: string;
+    upload: string;
+    searchPlaceholder: string;
+    allTypes: string;
+    sourceTypes: {
+      upload: string;
+      aiGenerated: string;
+      business: string;
+    };
+    visibility: {
+      private: string;
+      tenantShared: string;
+    };
+    viewModes: {
+      preview: string;
+      source: string;
+    };
+    actions: {
+      openInNewTab: string;
+      download: string;
+    };
+    deleteConfirm: {
+      file: (name: string) => string;
+      folder: (name: string) => string;
+    };
+    messages: {
+      folderCreated: (name: string) => string;
+      createFolderFailed: string;
+      fileUploaded: (name: string) => string;
+      uploadFailed: (name: string) => string;
+      fileDeleted: (name: string) => string;
+      deleteFileFailed: string;
+      folderDeleted: (name: string) => string;
+      deleteFolderFailed: string;
+      emptyState: string;
+    };
+  };
+
   // Agents
   agents: {
     title: string;

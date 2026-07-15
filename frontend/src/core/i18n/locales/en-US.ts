@@ -200,6 +200,47 @@ export const enUS: Translations = {
     skillsPlaza: "Skills Plaza",
   },
 
+  // File Center
+  fileCenter: {
+    rootFolder: "Root Folder",
+    newFolder: "New Folder",
+    upload: "Upload File",
+    searchPlaceholder: "Search files and folders...",
+    allTypes: "All Types",
+    sourceTypes: {
+      upload: "Manual Upload",
+      aiGenerated: "AI Generated",
+      business: "Business Files",
+    },
+    visibility: {
+      private: "Private",
+      tenantShared: "Workspace Shared",
+    },
+    viewModes: {
+      preview: "Preview",
+      source: "Source",
+    },
+    actions: {
+      openInNewTab: "Open in New Tab",
+      download: "Download",
+    },
+    deleteConfirm: {
+      file: (name: string) => `Are you sure you want to delete file ${name}?`,
+      folder: (name: string) => `Are you sure you want to delete folder ${name}?`,
+    },
+    messages: {
+      folderCreated: (name: string) => `Folder ${name} created successfully`,
+      createFolderFailed: "Failed to create folder",
+      fileUploaded: (name: string) => `File ${name} uploaded successfully`,
+      uploadFailed: (name: string) => `Failed to upload file ${name}`,
+      fileDeleted: (name: string) => `File ${name} deleted successfully`,
+      deleteFileFailed: "Failed to delete file",
+      folderDeleted: (name: string) => `Folder ${name} deleted successfully`,
+      deleteFolderFailed: "Failed to delete folder",
+      emptyState: "No files or folders found",
+    },
+  },
+
   // Agents
   agents: {
     title: "Agents",

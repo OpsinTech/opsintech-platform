@@ -32,12 +32,14 @@ interface Props {
 }
 
 export function CreateTenantDialog({ open, onOpenChange, onSuccess }: Props) {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const [name, setName] = useState("");
   const [slug, setSlug] = useState("");
   const [ownerUserId, setOwnerUserId] = useState("");
   const [ownerUserName, setOwnerUserName] = useState("");
   const [tenantType, setTenantType] = useState("ops");
+  const [isCustomType, setIsCustomType] = useState(false);
+  const [customTypeInput, setCustomTypeInput] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
   const [users, setUsers] = useState<AdminUserOption[]>([]);
   const [searching, setSearching] = useState(false);
@@ -46,6 +48,33 @@ export function CreateTenantDialog({ open, onOpenChange, onSuccess }: Props) {
   const [error, setError] = useState<string | null>(null);
 
   const searchTimeout = useRef<NodeJS.Timeout | undefined>(undefined);
+
+  const customLabel =
+    locale === "zh-CN"
+      ? "自定义"
+      : locale === "ja"
+      ? "カスタム"
+      : locale === "ko"
+      ? "사용자 정의"
+      : "Custom";
+
+  const customEmptyError =
+    locale === "zh-CN"
+      ? "自定义类型不能为空"
+      : locale === "ja"
+      ? "カスタムタイプは空にできません"
+      : locale === "ko"
+      ? "사용자 정의 유형은 비워 둘 수 없습니다"
+      : "Custom type cannot be empty";
+
+  const customPlaceholder =
+    locale === "zh-CN"
+      ? "请输入自定义工作空间类型 (如: security)"
+      : locale === "ja"
+      ? "カスタムワークスペース类型を入力してください (例: security)"
+      : locale === "ko"
+      ? "사용자 정의 워크스페이스 유형을 입력하십시오 (예: security)"
+      : "Please enter custom workspace type (e.g., security)";
 
   useEffect(() => {
     if (!showDropdown) {
@@ -96,6 +125,12 @@ export function CreateTenantDialog({ open, onOpenChange, onSuccess }: Props) {
       return;
     }
 
+    const finalType = isCustomType ? customTypeInput.trim() : tenantType;
+    if (isCustomType && !finalType) {
+      setError(customEmptyError);
+      return;
+    }
+
     try {
       setIsLoading(true);
       setError(null);
@@ -110,7 +145,7 @@ export function CreateTenantDialog({ open, onOpenChange, onSuccess }: Props) {
           slug: slug.trim() || undefined,
           owner_user_id: ownerUserId.trim(),
           owner_role: "tenant_admin",
-          tenant_type: tenantType,
+          tenant_type: finalType,
         }),
       });
 
@@ -129,6 +164,8 @@ export function CreateTenantDialog({ open, onOpenChange, onSuccess }: Props) {
       setOwnerUserId("");
       setOwnerUserName("");
       setTenantType("ops");
+      setIsCustomType(false);
+      setCustomTypeInput("");
       setSearchTerm("");
     } catch (err: any /* eslint-disable-line @typescript-eslint/no-explicit-any */) {
       setError(err.message);
@@ -187,9 +224,12 @@ export function CreateTenantDialog({ open, onOpenChange, onSuccess }: Props) {
                 <button
                   key={type}
                   type="button"
-                  onClick={() => setTenantType(type)}
+                  onClick={() => {
+                    setTenantType(type);
+                    setIsCustomType(false);
+                  }}
                   className={`flex-1 px-3 py-2 rounded-md text-sm font-medium transition-colors border ${
-                    tenantType === type
+                    !isCustomType && tenantType === type
                       ? type === 'product'
                         ? 'bg-violet-50 border-violet-300 text-violet-700 dark:bg-violet-900/20 dark:border-violet-700 dark:text-violet-400'
                         : type === 'rd'
@@ -203,7 +243,26 @@ export function CreateTenantDialog({ open, onOpenChange, onSuccess }: Props) {
                    t.admin.tenants.types.ops}
                 </button>
               ))}
+              <button
+                type="button"
+                onClick={() => setIsCustomType(true)}
+                className={`flex-1 px-3 py-2 rounded-md text-sm font-medium transition-colors border ${
+                  isCustomType
+                    ? 'bg-amber-50 border-amber-300 text-amber-700 dark:bg-amber-900/20 dark:border-amber-700 dark:text-amber-400'
+                    : 'bg-white border-zinc-200 text-zinc-600 hover:bg-zinc-50 dark:bg-zinc-900 dark:border-zinc-700 dark:text-zinc-400 dark:hover:bg-zinc-800'
+                }`}
+              >
+                {customLabel}
+              </button>
             </div>
+            {isCustomType && (
+              <Input
+                value={customTypeInput}
+                onChange={(e) => setCustomTypeInput(e.target.value)}
+                placeholder={customPlaceholder}
+                className="mt-2"
+              />
+            )}
             <p className="text-xs text-zinc-500">
               {t.admin.tenants.createDialog.typeDescription}
             </p>

@@ -17,6 +17,7 @@ from app.gateway.routers import (
     assets,
     auth as auth_routes,
     channels,
+    files,
     mcp,
     memory,
     models,
@@ -193,6 +194,10 @@ This gateway provides custom endpoints for models, MCP configuration, skills, an
                 "description": "Upload and manage user files for threads",
             },
             {
+                "name": "files",
+                "description": "File Center — unified file and folder management across the platform",
+            },
+            {
                 "name": "threads",
                 "description": "Manage OpsinTech thread-local filesystem data",
             },
@@ -290,6 +295,9 @@ This gateway provides custom endpoints for models, MCP configuration, skills, an
 
     # Assets Management API
     app.include_router(assets.router)
+
+    # File Center API — unified file and folder management
+    app.include_router(files.router)
 
     # Summarization settings API (tenant-admin)
     app.include_router(summarization.router)

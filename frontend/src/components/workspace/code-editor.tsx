@@ -11,12 +11,12 @@ import { basicLightInit } from "@uiw/codemirror-theme-basic";
 import { monokaiInit } from "@uiw/codemirror-theme-monokai";
 import CodeMirror from "@uiw/react-codemirror";
 import { useTheme } from "next-themes";
-import { useMemo } from "react";
+import { useMemo, useContext } from "react";
 
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 
-import { useThread } from "./messages/context";
+import { ThreadContext } from "./messages/context";
 const customDarkTheme = monokaiInit({
   settings: {
     background: "transparent",
@@ -51,9 +51,8 @@ export function CodeEditor({
   autoFocus?: boolean;
   settings?: unknown;
 }) {
-  const {
-    thread: { isLoading },
-  } = useThread();
+  const threadContext = useContext(ThreadContext);
+  const isLoading = threadContext?.thread?.isLoading ?? false;
   const { resolvedTheme } = useTheme();
 
   const extensions = useMemo(() => {

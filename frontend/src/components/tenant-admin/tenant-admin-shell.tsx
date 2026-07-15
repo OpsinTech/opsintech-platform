@@ -5,7 +5,7 @@ import { Bot, Boxes, Building2, Radio, ShieldAlert, ShieldCheck, Users, Wrench }
 import { BackofficeShellLayout } from "@/components/backoffice/backoffice-shell-layout";
 import { useI18n } from "@/core/i18n/hooks";
 import { useCurrentTenant, useSwitchTenant, useTenantList } from "@/core/tenants";
-import { ROUTE_TYPE_REQUIREMENTS } from "@/core/tenants/route-type-requirements";
+import { hasRouteAccess } from "@/core/tenants/route-type-requirements";
 import { useWorkspaceTypeGuard } from "@/core/tenants/use-workspace-type-guard";
 
 export function TenantAdminShell({
@@ -33,11 +33,7 @@ export function TenantAdminShell({
   ];
 
   // Filter nav items by workspace type
-  const governanceNavItems = allGovernanceNavItems.filter((item) => {
-    const requiredTypes = ROUTE_TYPE_REQUIREMENTS[item.href];
-    if (!requiredTypes) return true;
-    return requiredTypes.includes(tenantType);
-  });
+  const governanceNavItems = allGovernanceNavItems.filter((item) => hasRouteAccess(item.href, tenantType));
 
   const sidebarExtra = (
     <div className="space-y-1">

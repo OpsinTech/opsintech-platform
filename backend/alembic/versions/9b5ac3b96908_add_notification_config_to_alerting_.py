@@ -25,8 +25,9 @@ def upgrade() -> None:
     # Backfill existing rows with an empty JSON object
     op.execute("UPDATE alerting_settings SET notification_config = '{}' WHERE notification_config IS NULL")
     # Now make it non-nullable
-    op.alter_column('alerting_settings', 'notification_config', nullable=False,
-                    server_default=sa.text("'{}'"))
+    with op.batch_alter_table('alerting_settings') as batch_op:
+        batch_op.alter_column('notification_config', nullable=False,
+                              server_default=sa.text("'{}'"))
 
 
 def downgrade() -> None:

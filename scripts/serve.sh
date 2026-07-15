@@ -126,18 +126,18 @@ trap cleanup INT TERM
 # config.yaml — exporting a bogus PostgreSQL URL here would override it and
 # cause connection failures.
 if [ -z "${AUTH_DB_URL:-}" ]; then
-    AUTH_DB_URL=$(python3 -c "
+    AUTH_DB_URL=$(cd "$REPO_ROOT/backend" && uv run --frozen python3 -c "
 import yaml, sys
 try:
-    with open('config.yaml') as f:
+    with open('$REPO_ROOT/config.yaml') as f:
         cfg = yaml.safe_load(f)
     db = cfg.get('database', {})
     if db.get('type') == 'postgres':
         auth = db.get('auth', {})
         print(auth.get('url', ''))
 except:
-    sys.exit(1)
-" 2>/dev/null)
+    sys.exit(0)
+" 2>/dev/null || true)
     if [ -n "$AUTH_DB_URL" ]; then
         export AUTH_DB_URL
         echo "✓ AUTH_DB_URL resolved from config.yaml (PostgreSQL)"

@@ -4,7 +4,7 @@ import { useRouter, usePathname } from "next/navigation";
 import { useEffect } from "react";
 
 import { useCurrentTenant } from "./hooks";
-import { ROUTE_TYPE_REQUIREMENTS } from "./route-type-requirements";
+import { hasRouteAccess } from "./route-type-requirements";
 
 /**
  * Redirects to /workspace/overview if the current workspace type does not have
@@ -23,14 +23,8 @@ export function useWorkspaceTypeGuard() {
 
     const tenantType = currentTenant?.tenant_type ?? "ops";
 
-    // Find the first matching route requirement
-    for (const [prefix, allowedTypes] of Object.entries(ROUTE_TYPE_REQUIREMENTS)) {
-      if (pathname.startsWith(prefix)) {
-        if (!allowedTypes.includes(tenantType)) {
-          router.replace("/workspace/overview");
-        }
-        return;
-      }
+    if (!hasRouteAccess(pathname, tenantType)) {
+      router.replace("/workspace/overview");
     }
   }, [currentTenant, isLoading, pathname, router]);
 }

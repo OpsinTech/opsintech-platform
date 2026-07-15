@@ -188,11 +188,13 @@ export default function AdminTenantsPage() {
                       <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${
                         tenant.tenant_type === 'product' ? 'bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-400' :
                         tenant.tenant_type === 'rd' ? 'bg-cyan-100 text-cyan-700 dark:bg-cyan-900/30 dark:text-cyan-400' :
-                        'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400'
+                        tenant.tenant_type === 'ops' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400' :
+                        'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400'
                       }`}>
                         {tenant.tenant_type === 'product' ? t.admin.tenants.types.product :
                          tenant.tenant_type === 'rd' ? t.admin.tenants.types.rd :
-                         t.admin.tenants.types.ops}
+                         tenant.tenant_type === 'ops' ? t.admin.tenants.types.ops :
+                         tenant.tenant_type || "未知"}
                       </span>
                     </td>
                     <td className="px-6 py-4">

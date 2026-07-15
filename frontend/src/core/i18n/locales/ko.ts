@@ -200,6 +200,47 @@ export const ko: Translations = {
     skillsPlaza: "스킬 광장",
   },
 
+  // File Center
+  fileCenter: {
+    rootFolder: "루트 폴더",
+    newFolder: "새 폴더",
+    upload: "파일 업로드",
+    searchPlaceholder: "파일 및 폴더 검색...",
+    allTypes: "모든 유형",
+    sourceTypes: {
+      upload: "수동 업로드",
+      aiGenerated: "AI 생성",
+      business: "비즈니스 파일",
+    },
+    visibility: {
+      private: "개인",
+      tenantShared: "워크스페이스 공유",
+    },
+    viewModes: {
+      preview: "미리보기",
+      source: "소스",
+    },
+    actions: {
+      openInNewTab: "새 탭에서 열기",
+      download: "다운로드",
+    },
+    deleteConfirm: {
+      file: (name: string) => `파일 ${name}을(를) 삭제하시겠습니까?`,
+      folder: (name: string) => `폴더 ${name}을(를) 삭제하시겠습니까?`,
+    },
+    messages: {
+      folderCreated: (name: string) => `폴더 ${name}이(가) 생성되었습니다`,
+      createFolderFailed: "폴더 생성 실패",
+      fileUploaded: (name: string) => `파일 ${name}이(가) 업로드되었습니다`,
+      uploadFailed: (name: string) => `파일 ${name} 업로드 실패`,
+      fileDeleted: (name: string) => `파일 ${name}이(가) 삭제되었습니다`,
+      deleteFileFailed: "파일 삭제 실패",
+      folderDeleted: (name: string) => `폴더 ${name}이(가) 삭제되었습니다`,
+      deleteFolderFailed: "폴더 삭제 실패",
+      emptyState: "파일 또는 폴더가 없습니다",
+    },
+  },
+
   // Agents
   agents: {
     title: "에이전트",

@@ -196,6 +196,47 @@ export const zhCN: Translations = {
     skillsPlaza: "技能广场",
   },
 
+  // File Center
+  fileCenter: {
+    rootFolder: "根目录",
+    newFolder: "新建文件夹",
+    upload: "上传文件",
+    searchPlaceholder: "搜索文件和文件夹...",
+    allTypes: "所有类型",
+    sourceTypes: {
+      upload: "手动上传",
+      aiGenerated: "AI 生成",
+      business: "业务文件",
+    },
+    visibility: {
+      private: "私有",
+      tenantShared: "工作空间共享",
+    },
+    viewModes: {
+      preview: "预览",
+      source: "源码",
+    },
+    actions: {
+      openInNewTab: "在新标签页打开",
+      download: "下载",
+    },
+    deleteConfirm: {
+      file: (name: string) => `确定要删除文件 ${name} 吗？`,
+      folder: (name: string) => `确定要删除文件夹 ${name} 吗？`,
+    },
+    messages: {
+      folderCreated: (name: string) => `文件夹 ${name} 创建成功`,
+      createFolderFailed: "创建文件夹失败",
+      fileUploaded: (name: string) => `文件 ${name} 上传成功`,
+      uploadFailed: (name: string) => `文件 ${name} 上传失败`,
+      fileDeleted: (name: string) => `文件 ${name} 删除成功`,
+      deleteFileFailed: "删除文件失败",
+      folderDeleted: (name: string) => `文件夹 ${name} 删除成功`,
+      deleteFolderFailed: "删除文件夹失败",
+      emptyState: "暂无文件或文件夹",
+    },
+  },
+
   // Agents
   agents: {
     title: "智能体",

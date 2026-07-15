@@ -8,6 +8,7 @@ import {
   ShieldAlertIcon,
   ShieldCheckIcon,
   BotIcon,
+  FolderIcon,
   TerminalSquare,
 } from "lucide-react";
 import Link from "next/link";
@@ -18,13 +19,13 @@ import { useSession } from "@/core/auth/hooks";
 import { useI18n } from "@/core/i18n/hooks";
 import { canAccessAdminPage } from "@/core/permissions/roles";
 import { useCurrentTenant } from "@/core/tenants";
-import { ROUTE_TYPE_REQUIREMENTS } from "@/core/tenants/route-type-requirements";
+import { hasRouteAccess } from "@/core/tenants/route-type-requirements";
 import { cn } from "@/lib/utils";
 
 export function WorkspaceNavChatList() {
   const { data: session } = useSession();
   const pathname = usePathname();
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const isAdmin = canAccessAdminPage(session?.user?.role);
   const { data: currentTenant } = useCurrentTenant();
   const { announcements } = useActiveAnnouncements({ limit: 20 });
@@ -33,6 +34,15 @@ export function WorkspaceNavChatList() {
   const unreadCount = unreadAnnouncements.length;
 
   const tenantType = currentTenant?.tenant_type ?? "ops";
+
+  const filesLabel =
+    locale === "zh-CN"
+      ? "文件中心"
+      : locale === "ja"
+      ? "ファイルセンター"
+      : locale === "ko"
+      ? "파일 센터"
+      : "File Center";
 
   const allLinks = [
     {
@@ -60,16 +70,22 @@ export function WorkspaceNavChatList() {
       active: pathname.startsWith("/workspace/skills"),
     },
     {
-      name: t.sidebarNav.announcements,
-      href: "/workspace/announcements",
-      icon: BellIcon,
-      active: pathname.startsWith("/workspace/announcements"),
-    },
-    {
       name: "智能终端",
       href: "/workspace/terminal",
       icon: TerminalSquare,
       active: pathname.startsWith("/workspace/terminal"),
+    },
+    {
+      name: filesLabel,
+      href: "/workspace/files",
+      icon: FolderIcon,
+      active: pathname.startsWith("/workspace/files"),
+    },
+    {
+      name: t.sidebarNav.announcements,
+      href: "/workspace/announcements",
+      icon: BellIcon,
+      active: pathname.startsWith("/workspace/announcements"),
     },
     ...(isAdmin
       ? [
@@ -90,11 +106,7 @@ export function WorkspaceNavChatList() {
   ];
 
   // Filter menu items by workspace type
-  const links = allLinks.filter((link) => {
-    const requiredTypes = ROUTE_TYPE_REQUIREMENTS[link.href];
-    if (!requiredTypes) return true; // visible for all types
-    return requiredTypes.includes(tenantType);
-  });
+  const links = allLinks.filter((link) => hasRouteAccess(link.href, tenantType));
 
   return (
     <nav className="flex w-full flex-col gap-1 px-2 py-2">

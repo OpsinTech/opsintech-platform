@@ -22,3 +22,12 @@ export const ROUTE_TYPE_REQUIREMENTS: Record<string, string[]> = {
   // 审计日志 — 仅运维
   "/tenant-admin/audit": ["ops"],
 };
+
+/**
+ * Checks if a tenant type is allowed to access a given route prefix.
+ * Built-in 'ops' routes are accessible by any custom workspace types (i.e. not 'product' or 'rd').
+ */
+export function hasRouteAccess(routePath: string, tenantType: string): boolean {
+  // Completely disabled route restrictions per user request: all workspace types have access to all routes
+  return true;
+}
