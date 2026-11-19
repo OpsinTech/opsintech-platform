@@ -697,6 +697,7 @@ export const zhCN: Translations = {
         email: "邮箱",
         role: "角色",
         status: "状态",
+        createdAt: "创建时间",
         actions: "操作",
       },
       unnamed: "未命名",

@@ -633,6 +633,7 @@ export interface Translations {
         email: string;
         role: string;
         status: string;
+        createdAt: string;
         actions: string;
       };
       unnamed: string;
