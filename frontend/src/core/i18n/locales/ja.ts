@@ -708,6 +708,7 @@ export const ja: Translations = {
         email: "メールアドレス",
         role: "ロール",
         status: "ステータス",
+        createdAt: "作成日時",
         actions: "アクション",
       },
       unnamed: "名前未設定",

@@ -710,6 +710,7 @@ export const enUS: Translations = {
         email: "Email",
         role: "Role",
         status: "Status",
+        createdAt: "Created At",
         actions: "Actions",
       },
       unnamed: "Unnamed",

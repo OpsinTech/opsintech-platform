@@ -24,6 +24,13 @@ interface AdminUser {
   isBootstrapAdmin?: boolean;
 }
 
+function formatCreatedAt(createdAt: string | null | undefined): string {
+  if (!createdAt) return "-";
+  const date = new Date(createdAt);
+  if (Number.isNaN(date.getTime())) return "-";
+  return date.toLocaleString();
+}
+
 export default function AdminUsersPage() {
   const { t } = useI18n();
   const [users, setUsers] = useState<AdminUser[]>([]);
@@ -153,7 +160,7 @@ export default function AdminUsersPage() {
       ) : loading ? (
         <div className="text-zinc-500">{t.admin.users.loading}</div>
       ) : (
-        <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl overflow-hidden">
+        <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl overflow-x-auto">
           <table className="w-full text-left text-sm whitespace-nowrap">
             <thead className="bg-zinc-50 dark:bg-zinc-800/50 border-b border-zinc-200 dark:border-zinc-800">
               <tr>
@@ -161,6 +168,7 @@ export default function AdminUsersPage() {
                 <th className="px-6 py-4 font-medium text-zinc-600 dark:text-zinc-400">{t.admin.users.columns.email}</th>
                 <th className="px-6 py-4 font-medium text-zinc-600 dark:text-zinc-400">{t.admin.users.columns.role}</th>
                 <th className="px-6 py-4 font-medium text-zinc-600 dark:text-zinc-400">{t.admin.users.columns.status}</th>
+                <th className="px-6 py-4 font-medium text-zinc-600 dark:text-zinc-400">{t.admin.users.columns.createdAt}</th>
                 <th className="px-6 py-4 font-medium text-zinc-600 dark:text-zinc-400 text-right">{t.admin.users.columns.actions}</th>
               </tr>
             </thead>
@@ -194,6 +202,7 @@ export default function AdminUsersPage() {
                       </span>
                     )}
                   </td>
+                  <td className="px-6 py-4">{formatCreatedAt(user.createdAt)}</td>
                   <td className="px-6 py-4 text-right">
                     <div className="flex items-center justify-end gap-2">
                       <Button

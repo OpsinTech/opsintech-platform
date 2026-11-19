@@ -708,6 +708,7 @@ export const ko: Translations = {
         email: "이메일",
         role: "역할",
         status: "상태",
+        createdAt: "생성 일시",
         actions: "작업",
       },
       unnamed: "이름 없음",
